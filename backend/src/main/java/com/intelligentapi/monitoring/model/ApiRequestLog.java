@@ -4,8 +4,15 @@
 
 package com.intelligentapi.monitoring.model;
 
-// This class represents a single API request log
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "api_request_log")
 public class ApiRequestLog {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     private String endpoint;
     private long responseTime;
@@ -13,8 +20,11 @@ public class ApiRequestLog {
     private String ipAddress;
     private String timestamp;
 
-    // Default constructor required for JSON conversion
     public ApiRequestLog() {}
+
+    public Long getId() {
+        return id;
+    }
 
     public String getEndpoint() {
         return endpoint;
