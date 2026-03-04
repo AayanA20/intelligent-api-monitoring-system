@@ -1,20 +1,26 @@
+// 1️ Receives the request from client (Postman / frontend)
+// 2️ send the request to service and service convert the json data to java object 
+// 3️ Processes the request
+// 4️ Sends response back to the client
+
 package com.intelligentapi.monitoring.controller;
 
 import com.intelligentapi.monitoring.model.ApiRequestLog;
+import com.intelligentapi.monitoring.service.ApiLogService; ;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-@RestController // tells this class is responsible for handleing HTTP request
-@RequestMapping("/api") // all endpoint start with /api
+@RestController
+@RequestMapping("/api")
 public class ApiLogController {
 
-    @PostMapping("/log-request") //
-    public String logRequest(@RequestBody ApiRequestLog log) { // convert JSON request into java object 
+    @Autowired
+    private ApiLogService apiLogService;
 
-        System.out.println("Endpoint: " + log.getEndpoint());
-        System.out.println("Response Time: " + log.getResponseTime());
-        System.out.println("Status Code: " + log.getStatusCode());
-        System.out.println("IP Address: " + log.getIpAddress());
-        System.out.println("Timestamp: " + log.getTimestamp());
+    @PostMapping("/log-request")
+    public String logRequest(@RequestBody ApiRequestLog log) {
+
+        apiLogService.logApiRequest(log);
 
         return "Request logged successfully";
     }

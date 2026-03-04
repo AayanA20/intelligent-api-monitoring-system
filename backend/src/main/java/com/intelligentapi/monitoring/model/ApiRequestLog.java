@@ -1,7 +1,10 @@
-//we are making an java object so that springboot can semd and recive JSON data
+// We create a Java object so that Spring Boot can send and receive JSON data.
+// This model class represents the data structure of an API request.
+// It defines what information we store for each API request.
+
 package com.intelligentapi.monitoring.model;
 
-//This class represenets one API request log
+// This class represents a single API request log
 public class ApiRequestLog {
 
     private String endpoint;
@@ -10,6 +13,7 @@ public class ApiRequestLog {
     private String ipAddress;
     private String timestamp;
 
+    // Default constructor required for JSON conversion
     public ApiRequestLog() {}
 
     public String getEndpoint() {
