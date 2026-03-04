@@ -1,0 +1,14 @@
+1. CSIC 2010 HTTP DATASET:
+   This DATASET is a web application traffic dataset containig both normal and malicious Http  REQUESTS. It was generated to evaluate web intusion detection system. The dataset includes realistic HTTP request logs ,which contains attack types such as SQL injection, buffer overflow, information leakge and malformed requests.
+   this dataset is highly relevant because HTTP requests can be treates as API endpoint calls. By grouping requests into user sessions and modeling request sequences , we can apply sequence-based anomaly detection techniques to identify any abnormal API usage.
+
+2. CSICIDS2017:
+    It includes realistic network traffic with both normal behavior and multiple attack scenarios such as DDoS, brute force, bot activity, and web attacks. The dataset provides flow-based features extracted from raw network traffic along with labeled attack categories.Although network-flow based, the dataset contains HTTP and bot-related traffic patterns that can be used to study abnormal behavioral sequences. It is suitable for modeling automated access patterns.
+
+3. HDFS Log Dataset:
+   It is widely used in log-based anomaly detection research. The dataset consists of event sequences labeled as normal or anomalous, making it suitable for sequential anomaly detection experiments.System call sequences are structurally similar to API call sequences. This dataset supports experimentation with recurrent neural networks (RNNs) and LSTMs for detecting abnormal sequential behavior.
+
+
+   
+
+   

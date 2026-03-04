@@ -1,0 +1,28 @@
+A Malware-Detection Method Using Deep Learning to Fully Extract API Sequence Features[https://www.mdpi.com/2079-9292/14/1/167#Abstract]
+Few-Shot API Attack Detection: Overcoming Data Scarcity with GAN-Inspired Learning[https://arxiv.org/html/2405.11258v1]
+An Adversarial Robust Behavior Sequence Anomaly Detection Approach Based on Critical Behavior Unit Learning[https://arxiv.org/abs/2509.15756]
+Explainable Anomaly Detection through Web API Invariant Inference[https://www.arxiv.org/abs/2512.06906]
+
+As an Image (Visual): They turn the list of API calls into a grayscale picture. Imagine turning a book into a pattern of dots. If the software makes calls frequently or in a specific pair, it creates a specific texture in the image. They use a "Convolutional Neural Network" (CNN) the kind of AI used for facial recognition, to spot "malicious textures".
+• As a Language (Semantic): They also treat the list of API calls like a sentence in a language. They use AI models designed for reading text (TextCNN and Bi-LSTM) to understand the meaning and order of the commands. For example, knowing that "download file" happened before "execute file" is important context.
+The Results:
+• Accuracy: The system achieved 99% accuracy in distinguishing between safe software and malware.
+• Strengths: It was excellent at catching specific types of malware like Adware and Downloaders because their behavior patterns were very distinct in both the image and text analysis.
+• Weakness: It struggled slightly with "Droppers" (software that installs viruses) because they often look very similar to "Trojans" (software that disguises itself as safe).
+
+The Solution: The authors created a system called GIAAD (GAN-Inspired Anomalous API Detection) that solves the data shortage by creating its own "fake" data to practice on.
+• The Generator (The Faker): They used a powerful language AI called RoBERTa (similar to the tech behind ChatGPT). They mask parts of real API requests (e.g., hiding a specific command) and ask the AI to fill in the blank. This creates thousands of new, synthetic examples of API traffic that look real but are slightly different from the original data.
+• The Detector (The Guard): They took this new, larger mixture of real and synthetic data and trained a security system to spot the difference between normal traffic and attacks.
+The Results:
+• Performance: Even with very little starting data (few-shot learning), their method beat standard detection models.
+• Key Win: On a specific dataset (ATRDF 2023), it improved the detection of "Directory Traversal" attacks (trying to access hidden folders) significantly, raising the "F1-Score" (a measure of reliability) from roughly 60% to over 85%
+
+The Problem: Web applications often behave strangely without being malicious (e.g., a user clicking a button twice). Security systems often flag these as attacks (false positives). Furthermore, sometimes an attack looks almost identical to a normal action in the logs, and the only way to tell the difference is by knowing the rules of the database behind the app.
+The Solution: The researchers built MINES, a system that looks beyond the logs and tries to understand the "logic" of the application's database.
+• Inferring Rules: It uses a Large Language Model (LLM) to look at the API and the database structure (schema). It then guesses the rules (invariants). For example, "A user cannot delete a profile that doesn't exist".
+• Verification: It turns these rules into Python code. When new logs come in, it checks them against these logic rules. If a log breaks the logic (e.g., trying to access data that shouldn't be accessible), it is flagged as an anomaly.
+The Results:
+• Precision: The system achieved a very high success rate in finding attacks while having almost zero false positives. This means if the system says something is an attack, it is almost certainly right.
+• Comparison: It beat other leading methods (like LogRobust and LogFormer) on standard tests involving web-tamper attacks.
+
+
