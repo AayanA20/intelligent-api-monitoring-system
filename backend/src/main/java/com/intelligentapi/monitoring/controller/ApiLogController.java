@@ -6,7 +6,7 @@
 package com.intelligentapi.monitoring.controller;
 
 import com.intelligentapi.monitoring.model.ApiRequestLog;
-import com.intelligentapi.monitoring.service.ApiLogService; ;
+import com.intelligentapi.monitoring.service.ApiLogService; 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
