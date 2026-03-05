@@ -1,4 +1,4 @@
-// This flie is created beacuse in Spring BOot all the HTTP request are handel by the controller 
+// This file is created because in Spring Boot all the HTTP request are handled by the controller 
 
 package com.intelligentapi.monitoring.controller;
 

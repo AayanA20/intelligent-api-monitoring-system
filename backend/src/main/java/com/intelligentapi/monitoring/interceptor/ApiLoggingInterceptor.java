@@ -15,13 +15,14 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
     public ApiLoggingInterceptor(MonitoringService monitoringService) {
         this.monitoringService = monitoringService;
     }
-    
+
     @Override
     public boolean preHandle(HttpServletRequest request,
                              HttpServletResponse response,
                              Object handler) throws Exception {
-        
+
         System.out.println("INTERCEPTOR EXECUTED");
+
         String endpoint = request.getRequestURI();
         String method = request.getMethod();
         String ip = request.getRemoteAddr();
@@ -31,24 +32,26 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
         System.out.println("Method: " + method);
         System.out.println("IP Address: " + ip);
 
-        //Dummy values for testing
-        int requestCount = 1;
-        int heavyApiCalls = 1;
+        // Call MonitoringService to track request behavior
+        String decision = monitoringService.trackAndEvaluateRequest(ip, endpoint);
 
-        String decision = monitoringService.evaluateRequest(endpoint, requestCount, heavyApiCalls, false);
         request.setAttribute("decision", decision);
+
         System.out.println("Security Decision: " + decision);
 
+        // BLOCK user
         if(decision.equals("BLOCK")){
             response.setStatus(403);
             response.getWriter().write("Request blocked due to suspicious behavior.");
             return false;
         }
 
+        // SLOW response
         if(decision.equals("SLOW")){
             Thread.sleep(3000);
         }
 
+        // WARN user
         if(decision.equals("WARN")){
             System.out.println("Warning: Suspicious API usage detected.");
         }
