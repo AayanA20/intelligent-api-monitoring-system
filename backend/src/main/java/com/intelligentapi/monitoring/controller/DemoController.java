@@ -2,27 +2,25 @@
 package com.intelligentapi.monitoring.controller;
 
 import org.springframework.web.bind.annotation.*;
-import com.intelligentapi.monitoring.service.MonitoringService;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api")
 public class DemoController {
 
-    private final MonitoringService monitoringService;
+    @GetMapping("/heavy")
+    public String heavyApi(HttpServletRequest request) {
 
-    public DemoController(MonitoringService monitoringService) {
-        this.monitoringService = monitoringService;
+        String decision = (String) request.getAttribute("decision");
+
+        return "Heavy API Response | Action: " + decision;
     }
 
-    @GetMapping("/heavy")
-    public String heavyApi() throws InterruptedException {
+    @GetMapping("/normal")
+    public String normalApi(HttpServletRequest request) {
 
-        String action = monitoringService.evaluateRequest("/api/heavy",6,0,false);
+        String decision = (String) request.getAttribute("decision");
 
-        if(action.equals("SLOW")){
-            Thread.sleep(3000);
-        }
-
-        return "Heavy API Response | Action: " + action;
+        return "Normal API Response | Action: " + decision;
     }
 }
