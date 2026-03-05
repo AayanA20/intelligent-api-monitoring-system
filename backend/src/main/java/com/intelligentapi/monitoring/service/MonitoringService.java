@@ -15,40 +15,35 @@ public class MonitoringService {
     private final RuleEngine ruleEngine;
     private final ApiRequestLogRepository apiRequestLogRepository;
 
-    // Track number of requests per IP
+    // Track requests per USER
     private Map<String, Integer> requestCounter = new ConcurrentHashMap<>();
 
-    // Track heavy API usage per IP
+    // Track heavy API usage per USER
     private Map<String, Integer> heavyApiCounter = new ConcurrentHashMap<>();
 
-    public MonitoringService(RuleEngine ruleEngine, ApiRequestLogRepository apiRequestLogRepository) {
+    public MonitoringService(RuleEngine ruleEngine,
+                             ApiRequestLogRepository apiRequestLogRepository) {
         this.ruleEngine = ruleEngine;
         this.apiRequestLogRepository = apiRequestLogRepository;
     }
 
-    // tracks request behavior and sends to RuleEngine
-    public String trackAndEvaluateRequest(String ip, String endpoint) {
+    // Track behavior based on USER
+    public String trackAndEvaluateRequest(String user, String endpoint) {
 
-        // Increase total request count
-        int requestCount = requestCounter.getOrDefault(ip, 0) + 1;
-        requestCounter.put(ip, requestCount);
+        int requestCount = requestCounter.getOrDefault(user, 0) + 1;
+        requestCounter.put(user, requestCount);
 
-        // Get heavy API count
-        int heavyCalls = heavyApiCounter.getOrDefault(ip, 0);
+        int heavyCalls = heavyApiCounter.getOrDefault(user, 0);
 
-        // If the endpoint is heavy API
-        if (endpoint.equals("/api/heavy")) {
+        if(endpoint.equals("/api/heavy")){
             heavyCalls++;
-            heavyApiCounter.put(ip, heavyCalls);
+            heavyApiCounter.put(user, heavyCalls);
         }
 
         boolean botPattern = false;
 
-        // Send values to RuleEngine
         return ruleEngine.analyzeRequest(endpoint, requestCount, heavyCalls, botPattern);
     }
-
-    // Analytics methods
 
     public List<ApiRequestLog> getSlowApis() {
         return apiRequestLogRepository.findByResponseTimeGreaterThan(2000L);
