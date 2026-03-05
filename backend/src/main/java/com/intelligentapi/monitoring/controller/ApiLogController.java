@@ -6,22 +6,21 @@
 package com.intelligentapi.monitoring.controller;
 
 import com.intelligentapi.monitoring.model.ApiRequestLog;
-import com.intelligentapi.monitoring.service.ApiLogService; 
-import org.springframework.beans.factory.annotation.Autowired;
+import com.intelligentapi.monitoring.service.ApiLogService;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api")
 public class ApiLogController {
 
-    @Autowired
-    private ApiLogService apiLogService;
+    private final ApiLogService apiLogService;
+
+    public ApiLogController(ApiLogService apiLogService) {
+        this.apiLogService = apiLogService;
+    }
 
     @PostMapping("/log-request")
-    public String logRequest(@RequestBody ApiRequestLog log) {
-
-        apiLogService.logApiRequest(log);
-
-        return "Request logged successfully";
+    public ApiRequestLog logRequest(@RequestBody ApiRequestLog log) {
+        return apiLogService.logApiRequest(log);
     }
 }

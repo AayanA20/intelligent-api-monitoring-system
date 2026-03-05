@@ -31,9 +31,9 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
         System.out.println("Method: " + method);
         System.out.println("IP Address: " + ip);
 
-        // Dummy values for testing
-        int requestCount = 25;
-        int heavyApiCalls = 10;
+        //Dummy values for testing
+        int requestCount = 1;
+        int heavyApiCalls = 1;
 
         String decision = monitoringService.evaluateRequest(endpoint, requestCount, heavyApiCalls, false);
         request.setAttribute("decision", decision);
