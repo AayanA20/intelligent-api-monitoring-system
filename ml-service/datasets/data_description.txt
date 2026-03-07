@@ -8,7 +8,9 @@
 3. HDFS Log Dataset:
    It is widely used in log-based anomaly detection research. The dataset consists of event sequences labeled as normal or anomalous, making it suitable for sequential anomaly detection experiments.System call sequences are structurally similar to API call sequences. This dataset supports experimentation with recurrent neural networks (RNNs) and LSTMs for detecting abnormal sequential behavior.
 
+4.ATRDF 2023 Dataset
 
+The ATRDF 2023 dataset, released as part of the Cisco × Ariel University API Security Challenge, contains labeled HTTP API request logs for research on API security and attack detection. The dataset is divided into four sub-datasets, and each sub-dataset contains a train and validation CSV file, resulting in eight files in total. Each record includes information such as IP address, timestamp, API endpoint, HTTP method, status code, payload size, and an attack label. The dataset contains several attack categories including SQL Injection (SQLi), Cross-Site Scripting (XSS), Remote Code Execution (RCE), Log4J exploitation, Directory Traversal, Cookie Injection, and Log Forging, along with normal API traffic.
    
 
    
