@@ -5,6 +5,8 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
+  const [name, setName] = useState('')
+const [email, setEmail] = useState('')
   const [mode, setMode] = useState('login')
   const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('password')
@@ -21,7 +23,7 @@ export default function Login() {
         await login(username, password)
         toast.success(`Welcome back, ${username}`)
       } else {
-        await register(username, password)
+          await register(name, username, email, password)
         toast.success(`Account created for ${username}`)
       }
       nav('/')
@@ -98,7 +100,35 @@ export default function Login() {
               ? 'Sign in to access the monitoring dashboard.'
               : 'Register a new user — stored in memory for this demo.'}
           </p>
+{mode === 'register' && (
+  <>
+    <div>
+      <label className="text-xs font-semibold text-slate-400 mb-2 block">
+        Full Name
+      </label>
+      <input
+        type="text"
+        className="input"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        required
+      />
+    </div>
 
+    <div>
+      <label className="text-xs font-semibold text-slate-400 mb-2 block">
+        Email
+      </label>
+      <input
+        type="email"
+        className="input"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+      />
+    </div>
+  </>
+)}
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">

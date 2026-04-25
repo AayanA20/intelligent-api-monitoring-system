@@ -5,16 +5,8 @@ import {
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 
-const navItems = [
-  { to: '/',           label: 'Overview',         icon: LayoutDashboard },
-  { to: '/logs',       label: 'Live Logs',        icon: Activity },
-  { to: '/abuse',      label: 'Abuse Timeline',   icon: ShieldAlert },
-  { to: '/simulator',  label: 'Attack Simulator', icon: Zap },
-  { to: '/about',      label: 'About',            icon: Info },
-]
-
 export default function Layout({ children }) {
-  const { user, logout } = useAuth()
+  const { user, logout } = useAuth()   // ✅ correct place
   const nav = useNavigate()
 
   const onLogout = () => {
@@ -22,6 +14,19 @@ export default function Layout({ children }) {
     toast.success('Logged out')
     nav('/login')
   }
+
+  // ✅ navItems MUST be inside component
+  const navItems = user?.role === 'admin'
+    ? [
+        { to: '/', label: 'Overview', icon: LayoutDashboard },
+        { to: '/logs', label: 'Live Logs', icon: Activity },
+        { to: '/about', label: 'About', icon: Info },
+      ]
+    : [
+        { to: '/abuse', label: 'Abuse Timeline', icon: ShieldAlert },
+        { to: '/simulator', label: 'Attack Simulator', icon: Zap },
+        { to: '/about', label: 'About', icon: Info },
+      ]
 
   return (
     <div className="flex min-h-screen">
@@ -33,7 +38,9 @@ export default function Layout({ children }) {
             </div>
             <div>
               <h1 className="font-bold text-lg leading-tight">API Guardian</h1>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Abuse Detection</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+                Abuse Detection
+              </p>
             </div>
           </div>
         </div>
@@ -46,9 +53,11 @@ export default function Layout({ children }) {
               end={to === '/'}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
-                 ${isActive
-                   ? 'bg-brand/15 text-brand-light border border-brand/20'
-                   : 'text-slate-400 hover:text-slate-200 hover:bg-bg-hover border border-transparent'}`
+                 ${
+                   isActive
+                     ? 'bg-brand/15 text-brand-light border border-brand/20'
+                     : 'text-slate-400 hover:text-slate-200 hover:bg-bg-hover border border-transparent'
+                 }`
               }
             >
               <Icon className="w-4 h-4" />
@@ -63,7 +72,9 @@ export default function Layout({ children }) {
               {user?.username?.[0]?.toUpperCase() || 'U'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">{user?.username}</p>
+              <p className="text-sm font-semibold truncate">
+                {user?.username}
+              </p>
               <p className="text-xs text-slate-500 flex items-center gap-1">
                 <Circle className="w-1.5 h-1.5 fill-success text-success dot-pulse" />
                 Online
