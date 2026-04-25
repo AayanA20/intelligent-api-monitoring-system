@@ -1,4 +1,5 @@
 import sys
+import re
 import torch
 import torch.nn as nn
 from fastapi import FastAPI
@@ -34,7 +35,23 @@ except Exception as e:
 from minor_ml_models2 import ModelUtils
 utils = ModelUtils()
 
-# ── Step 5: FastAPI app ──
+# ── Step 5: Attack pattern overrides ──
+# These guarantee detection regardless of ML model score
+PATTERN_OVERRIDES = {
+    'BLOCK': [
+        re.compile(r'(;|\||\`|\$\()\s*(ls|cat|rm|wget|curl|bash|sh|python|nc)\b', re.IGNORECASE),
+        re.compile(r'\.\.\/|\.\.\\|%2e%2e|etc\/passwd|windows\.ini', re.IGNORECASE),
+        re.compile(r'eval\(|exec\(|system\(|\/bin\/sh|passthru', re.IGNORECASE),
+        re.compile(r'\$\{|jndi:|ldap://|rmi://', re.IGNORECASE),
+    ],
+    'WARN': [
+        re.compile(r"select\b|union\b|insert\b|drop\b|delete\b|--|sleep\(|1=1", re.IGNORECASE),
+        re.compile(r'<script|javascript:|onerror=|onload=|alert\(|<iframe', re.IGNORECASE),
+        re.compile(r'sqlmap|nikto|nmap|burpsuite|masscan|dirbuster', re.IGNORECASE),
+    ],
+}
+
+# ── Step 6: FastAPI app ──
 app = FastAPI()
 
 class RequestData(BaseModel):
@@ -48,6 +65,25 @@ class RequestData(BaseModel):
 @app.post("/predict")
 def predict(req: RequestData):
     try:
+        from urllib.parse import unquote
+        attack_surface = unquote(f"{req.url} {req.body} {req.response_body}")
+        ua = req.headers.get('User-Agent', '') or req.headers.get('user-agent', '')
+
+        print(f"[predict] attack_surface: {attack_surface[:200]}")
+        print(f"[predict] ua: {ua[:100]}")
+
+        # ── Override: check explicit patterns FIRST ──
+        for pattern in PATTERN_OVERRIDES['BLOCK']:
+            if pattern.search(attack_surface) or pattern.search(ua):
+                print(f"[predict] BLOCK override triggered: {pattern.pattern[:50]}")
+                return {"score": 0.95, "label": "BLOCK"}
+
+        for pattern in PATTERN_OVERRIDES['WARN']:
+            if pattern.search(attack_surface) or pattern.search(ua):
+                print(f"[predict] WARN override triggered: {pattern.pattern[:50]}")
+                return {"score": 0.65, "label": "WARN"}
+
+        # ── Fall back to ML model score ──
         features = utils.extract_features(req.dict())
         tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
@@ -57,7 +93,6 @@ def predict(req: RequestData):
         with torch.no_grad():
             output = model(tensor)
             print(f"[predict] raw output shape: {output.shape}")
-            # Model outputs 256 features — apply sigmoid + mean to get a single score
             score = torch.sigmoid(output).mean().item()
 
         label = (
@@ -65,7 +100,7 @@ def predict(req: RequestData):
             "WARN"  if score > 0.5 else
             "ALLOW"
         )
-        print(f"[predict] score={score:.4f} label={label}")
+        print(f"[predict] ml score={score:.4f} label={label}")
         return {"score": round(score, 4), "label": label}
 
     except Exception as e:

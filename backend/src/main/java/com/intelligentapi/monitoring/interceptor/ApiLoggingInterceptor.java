@@ -18,19 +18,19 @@ import com.intelligentapi.monitoring.service.MLServiceClient;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Intercepts /api/** requests:
- *  1. Captures start time + user + endpoint.
- *  2. Calls RuleEngine via MonitoringService → rule decision (ALLOW/WARN/SLOW/BLOCK).
- *  3. Calls MLServiceClient → ML decision (ALLOW/WARN/BLOCK).
- *  4. Merges both decisions — takes the more severe one.
- *  5. Persists an ApiRequestLog for every request.
- *  6. Persists an AbuseEvent when decision != ALLOW.
- *  7. Applies the decision action (block / slow down / warn).
- */
 @Component
 public class ApiLoggingInterceptor implements HandlerInterceptor {
+
+    // Permanently blocked users (by username)
+    public static final Set<String> blockedUsers =
+        ConcurrentHashMap.newKeySet();
+
+    // Permanently blocked IPs — belt-and-suspenders in case user resolves differently
+    public static final Set<String> blockedIps =
+        ConcurrentHashMap.newKeySet();
 
     private final MonitoringService monitoringService;
     private final MLServiceClient mlServiceClient;
@@ -58,24 +58,43 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
         String method   = request.getMethod();
         String user     = resolveUser();
         String ip       = request.getRemoteAddr();
-        String fullUrl  = request.getRequestURL().toString();
+
+        // Build full decoded URL including query params
+        String queryString = request.getQueryString();
+        String decodedQuery = "";
+        if (queryString != null) {
+            try {
+                decodedQuery = "?" + java.net.URLDecoder.decode(queryString, "UTF-8");
+            } catch (Exception e) {
+                decodedQuery = "?" + queryString;
+            }
+        }
+        String fullUrl = request.getRequestURL().toString() + decodedQuery;
 
         request.setAttribute("endpoint", endpoint);
         request.setAttribute("method",   method);
         request.setAttribute("user",     user);
         request.setAttribute("ip",       ip);
 
+        // ── Check permanent block by USERNAME or IP ──
+        boolean isPermanentlyBlocked = blockedUsers.contains(user) || blockedIps.contains(ip);
+        if (isPermanentlyBlocked) {
+            System.out.println("[BLOCKED] Permanent block hit: user=" + user + " ip=" + ip);
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.setContentType("application/json");
+            response.getWriter().write(
+                "{\"error\":\"BLOCKED\",\"message\":\"Permanently blocked due to prior abuse.\"}"
+            );
+            saveLog(endpoint, method, user, "BLOCK", 0, 403, ip);
+            return false;
+        }
+
         // ── Rule engine decision ──
         String ruleDecision = monitoringService.trackAndEvaluateRequest(user, endpoint);
 
         // ── ML model decision ──
         String mlDecision = mlServiceClient.getDecision(
-            method,
-            fullUrl,
-            Collections.emptyMap(),
-            null,
-            200,
-            null
+            method, fullUrl, Collections.emptyMap(), null, 200, null
         );
 
         // ── Merge: take the more severe of the two ──
@@ -84,13 +103,22 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
 
         System.out.println("[" + method + "] " + endpoint
             + " | user=" + user
+            + " | ip=" + ip
             + " | rule=" + ruleDecision
             + " | ml=" + mlDecision
             + " | final=" + decision);
 
-        // Persist abuse event whenever decision is not ALLOW
+        // ── Permanently block if BLOCK decision ──
+        if ("BLOCK".equals(decision)) {
+            blockedUsers.add(user);
+            blockedIps.add(ip);
+            System.out.println("[BLOCKED] Added to permanent block: user=" + user + " ip=" + ip);
+        }
+
+        // Persist abuse event for non-ALLOW decisions
         if (!"ALLOW".equals(decision)) {
-            saveAbuseEvent(user, endpoint, ip, decision, reasonFor(decision, endpoint, ruleDecision, mlDecision));
+            saveAbuseEvent(user, endpoint, ip, decision,
+                reasonFor(decision, endpoint, ruleDecision, mlDecision));
         }
 
         if ("BLOCK".equals(decision)) {
@@ -137,15 +165,10 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
 
     // ---------- helpers ----------
 
-    /**
-     * Takes the more severe of two decisions.
-     * Severity order: ALLOW < WARN < SLOW < BLOCK
-     */
     private String mergeDecisions(String rule, String ml) {
         List<String> order = List.of("ALLOW", "WARN", "SLOW", "BLOCK");
         int ruleIdx = order.indexOf(rule);
         int mlIdx   = order.indexOf(ml);
-        // If ml returns an unknown value, default to rule decision
         if (mlIdx == -1) return rule;
         return order.get(Math.max(ruleIdx, mlIdx));
     }
@@ -162,12 +185,13 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
         }
     }
 
-    private String reasonFor(String decision, String endpoint, String ruleDecision, String mlDecision) {
+    private String reasonFor(String decision, String endpoint,
+                              String ruleDecision, String mlDecision) {
         String source = mlDecision.equals(decision) ? "ML Model" : "Rule Engine";
         return switch (decision) {
-            case "BLOCK" -> "Bot-like behavior or request flood detected [" + source + "]";
+            case "BLOCK" -> "Attack payload or bot flood detected [" + source + "]";
             case "SLOW"  -> "Expensive API abuse on " + endpoint + " [" + source + "]";
-            case "WARN"  -> "Possible endpoint looping on " + endpoint + " [" + source + "]";
+            case "WARN"  -> "Suspicious pattern on " + endpoint + " [" + source + "]";
             default      -> "Unknown";
         };
     }
@@ -190,7 +214,8 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
         }
     }
 
-    private void saveAbuseEvent(String user, String endpoint, String ip, String decision, String reason) {
+    private void saveAbuseEvent(String user, String endpoint,
+                                 String ip, String decision, String reason) {
         try {
             AbuseEvent event = new AbuseEvent();
             event.setUserName(user);

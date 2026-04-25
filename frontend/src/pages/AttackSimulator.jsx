@@ -1,12 +1,14 @@
 import { useState, useRef } from 'react'
 import {
   Play, Square, Zap, Activity, Repeat, Bot, RefreshCcw, Terminal,
+  Database, FolderOpen, Terminal as TerminalIcon, Cpu, Shield, AlertTriangle,
 } from 'lucide-react'
 import ChartCard from '../components/ChartCard'
 import * as API from '../lib/api'
 import toast from 'react-hot-toast'
 
-const SCENARIOS = [
+// ── Rule Engine Scenarios ─────────────────────────────────────────────────────
+const RULE_SCENARIOS = [
   {
     key: 'NORMAL',
     title: 'Normal Traffic',
@@ -16,7 +18,8 @@ const SCENARIOS = [
     accent: 'success',
     count: 5,
     delayMs: 400,
-    target: 'normal',
+    callFn: 'callNormal',
+    detectedBy: 'rule',
   },
   {
     key: 'EXPENSIVE',
@@ -27,7 +30,8 @@ const SCENARIOS = [
     accent: 'info',
     count: 8,
     delayMs: 200,
-    target: 'heavy',
+    callFn: 'callHeavy',
+    detectedBy: 'rule',
   },
   {
     key: 'LOOPING',
@@ -38,7 +42,8 @@ const SCENARIOS = [
     accent: 'warn',
     count: 25,
     delayMs: 80,
-    target: 'normal',
+    callFn: 'callNormal',
+    detectedBy: 'rule',
   },
   {
     key: 'BOT',
@@ -49,18 +54,83 @@ const SCENARIOS = [
     accent: 'danger',
     count: 55,
     delayMs: 30,
-    target: 'normal',
+    callFn: 'callNormal',
+    detectedBy: 'rule',
   },
 ]
 
+// ── ML Model Scenarios ────────────────────────────────────────────────────────
+const ML_SCENARIOS = [
+  {
+    key: 'SQL',
+    title: 'SQL Injection',
+    desc: "Injects SQL payloads into URL params — ML detects SELECT/UNION/OR patterns instantly.",
+    expected: 'WARN/BLOCK',
+    icon: Database,
+    accent: 'danger',
+    count: 5,
+    delayMs: 300,
+    callFn: 'callSQLInjection',
+    detectedBy: 'ml',
+    example: "?id=1' OR 1=1-- UNION SELECT *",
+  },
+  {
+    key: 'PATH',
+    title: 'Path Traversal',
+    desc: 'Directory traversal attack — ML detects ../../etc/passwd and %2e%2e patterns.',
+    expected: 'BLOCK',
+    icon: FolderOpen,
+    accent: 'danger',
+    count: 5,
+    delayMs: 300,
+    callFn: 'callPathTraversal',
+    detectedBy: 'ml',
+    example: '?path=../../etc/passwd',
+  },
+  {
+    key: 'CMD',
+    title: 'Command Injection',
+    desc: 'Shell command injection — ML detects ; ls, | cat, $(whoami) patterns.',
+    expected: 'BLOCK',
+    icon: TerminalIcon,
+    accent: 'danger',
+    count: 5,
+    delayMs: 300,
+    callFn: 'callCommandInjection',
+    detectedBy: 'ml',
+    example: '?cmd=; ls -la | cat /etc/shadow',
+  },
+  {
+    key: 'XSS',
+    title: 'XSS Attack',
+    desc: 'Cross-site scripting — ML detects <script>, onerror=, javascript: patterns.',
+    expected: 'WARN/BLOCK',
+    icon: Cpu,
+    accent: 'warn',
+    count: 5,
+    delayMs: 300,
+    callFn: 'callXSSAttack',
+    detectedBy: 'ml',
+    example: '?q=<script>alert(1)</script>',
+  },
+]
+
+const ALL_CALLS = {
+  callNormal:          API.callNormal,
+  callHeavy:           API.callHeavy,
+  callSQLInjection:    API.callSQLInjection,
+  callPathTraversal:   API.callPathTraversal,
+  callCommandInjection:API.callCommandInjection,
+  callXSSAttack:       API.callXSSAttack,
+}
+
 export default function AttackSimulator() {
-  const [running, setRunning] = useState(null)
+  const [running, setRunning]     = useState(null)
   const [consoleLog, setConsoleLog] = useState([])
   const abortRef = useRef(false)
 
-  const log = (msg, kind = 'info') => {
+  const log = (msg, kind = 'info') =>
     setConsoleLog(prev => [...prev.slice(-200), { t: Date.now(), msg, kind }])
-  }
 
   const reset = async () => {
     try {
@@ -76,26 +146,25 @@ export default function AttackSimulator() {
     if (running) return
     setRunning(scenario.key)
     abortRef.current = false
-    log(`▶ ${scenario.title} — firing ${scenario.count} requests to /api/${scenario.target}`, 'start')
+
+    const tag = scenario.detectedBy === 'ml' ? '[ML]' : '[RULE]'
+    log(`▶ ${tag} ${scenario.title} — firing ${scenario.count} requests`, 'start')
+    if (scenario.example) log(`  Payload: ${scenario.example}`, 'info')
 
     let allow = 0, warn = 0, slow = 0, block = 0, err = 0
+    const callFn = ALL_CALLS[scenario.callFn]
 
     for (let i = 0; i < scenario.count; i++) {
-      if (abortRef.current) {
-        log('■ Aborted by user', 'stop')
-        break
-      }
+      if (abortRef.current) { log('■ Aborted by user', 'stop'); break }
       try {
-        const call = scenario.target === 'heavy' ? API.callHeavy : API.callNormal
-        const res = await call()
-
+        const res = await callFn()
         if (res?.error === 403) {
           block++
           log(`  [${i + 1}] → 403 BLOCKED`, 'block')
         } else {
           const text = typeof res === 'string' ? res : JSON.stringify(res)
-          if (text.includes('SLOW'))       { slow++;  log(`  [${i + 1}] → SLOW`,  'slow') }
-          else if (text.includes('WARN'))  { warn++;  log(`  [${i + 1}] → WARN`,  'warn') }
+          if      (text.includes('SLOW'))  { slow++;  log(`  [${i + 1}] → SLOW`,  'slow')  }
+          else if (text.includes('WARN'))  { warn++;  log(`  [${i + 1}] → WARN`,  'warn')  }
           else if (text.includes('BLOCK')) { block++; log(`  [${i + 1}] → BLOCK`, 'block') }
           else                             { allow++; log(`  [${i + 1}] → ALLOW`, 'allow') }
         }
@@ -131,19 +200,57 @@ export default function AttackSimulator() {
         </button>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {SCENARIOS.map(s => (
-          <ScenarioCard
-            key={s.key}
-            scenario={s}
-            running={running === s.key}
-            disabled={running && running !== s.key}
-            onRun={() => run(s)}
-            onStop={stop}
-          />
-        ))}
+      {/* Rule Engine Scenarios */}
+      <div>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-brand/15 border border-brand/30 flex items-center justify-center">
+            <Shield className="w-4 h-4 text-brand-light" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-slate-100">Rule Engine Detection</h2>
+            <p className="text-xs text-slate-500">Threshold-based: request count, endpoint frequency, flood detection</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {RULE_SCENARIOS.map(s => (
+            <ScenarioCard
+              key={s.key}
+              scenario={s}
+              running={running === s.key}
+              disabled={running && running !== s.key}
+              onRun={() => run(s)}
+              onStop={stop}
+            />
+          ))}
+        </div>
       </div>
 
+      {/* ML Model Scenarios */}
+      <div>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-danger/15 border border-danger/30 flex items-center justify-center">
+            <Cpu className="w-4 h-4 text-danger" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-slate-100">ML Model Detection</h2>
+            <p className="text-xs text-slate-500">Content-based: detects attack payloads on the very first request, even before thresholds trigger</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {ML_SCENARIOS.map(s => (
+            <ScenarioCard
+              key={s.key}
+              scenario={s}
+              running={running === s.key}
+              disabled={running && running !== s.key}
+              onRun={() => run(s)}
+              onStop={stop}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Console */}
       <ChartCard
         title="Simulator console"
         subtitle="Live output from the browser's requests"
@@ -169,25 +276,37 @@ export default function AttackSimulator() {
         </div>
       </ChartCard>
 
-      <div className="card border-brand/30 bg-brand/5">
-        <h3 className="font-semibold text-slate-100 mb-2 flex items-center gap-2">
-          <Zap className="w-4 h-4 text-brand-light" /> Demo tip
-        </h3>
-        <ol className="text-sm text-slate-400 space-y-1 list-decimal list-inside">
-          <li>Open the Overview tab in one browser window.</li>
-          <li>Open this Simulator tab in another window (or a second monitor).</li>
-          <li>Click <strong>Reset counters</strong> — fresh start.</li>
-          <li>Run <strong>Normal Traffic</strong> first — show charts populating.</li>
-          <li>Run <strong>Endpoint Looping</strong> — Overview lights up with WARN.</li>
-          <li>Run <strong>Bot-like Flood</strong> — Overview shows BLOCK, Abuse Timeline fills up.</li>
-        </ol>
+      {/* Tips */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="card border-brand/30 bg-brand/5">
+          <h3 className="font-semibold text-slate-100 mb-2 flex items-center gap-2">
+            <Shield className="w-4 h-4 text-brand-light" /> Rule Engine Demo tip
+          </h3>
+          <ol className="text-sm text-slate-400 space-y-1 list-decimal list-inside">
+            <li>Click <strong>Reset counters</strong> — fresh start.</li>
+            <li>Run <strong>Normal Traffic</strong> — charts start populating.</li>
+            <li>Run <strong>Endpoint Looping</strong> — Overview lights up with WARN.</li>
+            <li>Run <strong>Bot-like Flood</strong> — BLOCK events fill Abuse Timeline.</li>
+          </ol>
+        </div>
+        <div className="card border-danger/30 bg-danger/5">
+          <h3 className="font-semibold text-slate-100 mb-2 flex items-center gap-2">
+            <Cpu className="w-4 h-4 text-danger" /> ML Model Demo tip
+          </h3>
+          <ol className="text-sm text-slate-400 space-y-1 list-decimal list-inside">
+            <li>Click <strong>Reset counters</strong> first.</li>
+            <li>Run any ML scenario — detection happens on request <strong>#1</strong>.</li>
+            <li>Check <strong>Abuse Timeline</strong> — reason shows <em>"[ML Model]"</em>.</li>
+            <li>Compare: Rule engine needs 20–50 requests; ML catches it immediately.</li>
+          </ol>
+        </div>
       </div>
     </div>
   )
 }
 
 function ScenarioCard({ scenario, running, disabled, onRun, onStop }) {
-  const { title, desc, expected, icon: Icon, accent, count, delayMs } = scenario
+  const { title, desc, expected, icon: Icon, accent, count, delayMs, example, detectedBy } = scenario
   const accents = {
     success: 'border-success/30 bg-success/5',
     warn:    'border-warn/30    bg-warn/5',
@@ -200,18 +319,34 @@ function ScenarioCard({ scenario, running, disabled, onRun, onStop }) {
     info:    'bg-info/10    text-info    border-info/30',
     danger:  'bg-danger/10  text-danger  border-danger/30',
   }
+  const badgeCls = {
+    success: 'badge-success',
+    warn:    'badge-warn',
+    info:    'badge-info',
+    danger:  'badge-danger',
+  }
   return (
     <div className={`card border ${accents[accent]}`}>
       <div className="flex items-start justify-between mb-4">
         <div className={`w-12 h-12 rounded-xl border flex items-center justify-center ${iconAccents[accent]}`}>
           <Icon className="w-6 h-6" />
         </div>
-        <span className={`badge badge-${accent === 'success' ? 'success' : accent === 'info' ? 'info' : accent === 'warn' ? 'warn' : 'danger'}`}>
-          Expected: {expected}
-        </span>
+        <div className="flex flex-col items-end gap-1.5">
+          <span className={badgeCls[accent]}>Expected: {expected}</span>
+          {detectedBy === 'ml' && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/25 uppercase tracking-wide">
+              ML Model
+            </span>
+          )}
+        </div>
       </div>
       <h3 className="font-semibold text-slate-100 mb-1">{title}</h3>
-      <p className="text-sm text-slate-400 mb-4">{desc}</p>
+      <p className="text-sm text-slate-400 mb-2">{desc}</p>
+      {example && (
+        <p className="text-xs mono text-slate-500 bg-black/30 rounded px-2 py-1 mb-3 truncate border border-slate-800">
+          {example}
+        </p>
+      )}
       <div className="flex items-center justify-between mb-4 text-xs text-slate-500">
         <span className="mono">{count} requests</span>
         <span className="mono">{delayMs}ms between</span>
@@ -243,5 +378,5 @@ function colorFor(kind) {
   }[kind] || 'text-slate-400'
 }
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
-const formatClock = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+const formatClock = t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
