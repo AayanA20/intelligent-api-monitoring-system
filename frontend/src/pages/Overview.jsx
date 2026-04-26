@@ -182,12 +182,12 @@ export default function Overview() {
       {/* Top Users — sorted by abuse severity */}
       <ChartCard
         title="Top Users"
-        subtitle="Sorted by abuse severity — click a user to see behaviour"
+        subtitle={`Sorted by abuse severity — click a user to see behaviour${sortedUsers.length > 4 ? ` · ${sortedUsers.length} users (scroll for more)` : ''}`}
       >
         {sortedUsers.length === 0 ? (
           <EmptyState text="No user activity yet" />
         ) : (
-          <div className="space-y-2">
+          <div className="max-h-[340px] overflow-y-auto pr-2 space-y-2 custom-scroll">
             {sortedUsers.map((u, i) => {
               const max = Math.max(...sortedUsers.map(x => x.count))
               const pct = (u.count / max) * 100
@@ -440,7 +440,7 @@ function UserModal({ username, logs, onClose }) {
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
             Recent Events
           </p>
-          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 custom-scroll">
             {userLogs.slice(0, 10).map((log, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-bg-soft border border-slate-800/60 text-xs">
                 <DecisionBadge value={log.decision} />

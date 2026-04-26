@@ -30,14 +30,23 @@ public class JwtFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
+        String path = request.getRequestURI();
+
+        // Skip JWT processing entirely for public endpoints
+        if (path.startsWith("/auth/login")
+                || path.startsWith("/auth/register")
+                || path.equals("/hello")
+                || path.startsWith("/analytics/")
+                || path.equals("/api/log-request")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String authHeader = request.getHeader("Authorization");
 
-        if(authHeader != null && authHeader.startsWith("Bearer ")){
-
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
-
-            try{
-
+            try {
                 String username = jwtUtil.extractUsername(token);
 
                 UsernamePasswordAuthenticationToken authentication =
@@ -46,19 +55,13 @@ public class JwtFilter extends OncePerRequestFilter {
                                 null,
                                 Collections.singletonList(new SimpleGrantedAuthority("USER"))
                         );
-
                 authentication.setDetails(
                         new WebAuthenticationDetailsSource().buildDetails(request)
                 );
-
                 SecurityContextHolder.getContext().setAuthentication(authentication);
-
-                System.out.println("JWT authenticated user: " + username);
-
-            }
-            catch(Exception e){
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                return;
+            } catch (Exception e) {
+                // Bad/expired token — DO NOT block. Just clear context and continue.
+                SecurityContextHolder.clearContext();
             }
         }
 

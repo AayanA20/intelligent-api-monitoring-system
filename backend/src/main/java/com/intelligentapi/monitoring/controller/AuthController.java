@@ -1,8 +1,12 @@
 package com.intelligentapi.monitoring.controller;
 
+import com.intelligentapi.monitoring.interceptor.ApiLoggingInterceptor;
+import com.intelligentapi.monitoring.model.User;
+import com.intelligentapi.monitoring.repository.UserRepository;
 import com.intelligentapi.monitoring.security.JwtUtil;
 import com.intelligentapi.monitoring.service.MonitoringService;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -11,48 +15,40 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
-/**
- * Auth endpoints:
- *  POST /auth/login      -> { token, username, role, name }
- *  POST /auth/register   -> { token, username, role, name }   (always role=user)
- *  GET  /auth/me         -> { username, role, name }
- *
- * Uniqueness:
- *  - username: must be unique
- *  - email:    must be unique (one account per email)
- *  - "admin":  reserved username, cannot be registered
- *
- * On successful login OR register, the user's in-memory rule-engine counters
- * are wiped, so a brand-new user never inherits another user's blocked state
- * and a returning user starts a fresh session.
- */
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
 
-    // simple but reliable: something@something.something
     private static final Pattern EMAIL_RE =
             Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
 
     private final JwtUtil jwtUtil;
     private final MonitoringService monitoringService;
+    private final UserRepository userRepository;
 
-    // username -> UserRecord
-    private final Map<String, UserRecord> users = new ConcurrentHashMap<>();
-    // emailLower -> username (fast uniqueness check)
-    private final Map<String, String> emailIndex = new ConcurrentHashMap<>();
-
-    public AuthController(JwtUtil jwtUtil, MonitoringService monitoringService) {
+    public AuthController(JwtUtil jwtUtil,
+                          MonitoringService monitoringService,
+                          UserRepository userRepository) {
         this.jwtUtil = jwtUtil;
         this.monitoringService = monitoringService;
+        this.userRepository = userRepository;
+    }
 
-        // Pre-seed the admin
-        UserRecord adminRec = new UserRecord("password", "Administrator", "admin@apg.local", "admin");
-        users.put("admin", adminRec);
-        emailIndex.put(adminRec.email.toLowerCase(), "admin");
+    /**
+     * Seed the admin user on startup if they don't already exist.
+     * This runs ONCE per app start. The admin row stays in the DB after that.
+     */
+    @PostConstruct
+    public void seedAdmin() {
+        if (!userRepository.existsByUsername("admin")) {
+            User admin = new User("admin", "password", "Administrator",
+                                  "admin@apg.local", "admin");
+            userRepository.save(admin);
+            System.out.println("[AuthController] Admin user seeded");
+        }
     }
 
     @PostMapping("/login")
@@ -64,21 +60,24 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "username and password required");
         }
 
-        UserRecord stored = users.get(username);
-        if (stored == null || !stored.password.equals(password)) {
+        Optional<User> stored = userRepository.findByUsername(username);
+        if (stored.isEmpty() || !stored.get().getPassword().equals(password)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
-        // Fresh session — clear any leftover counter state for this user
+        User u = stored.get();
+
+        // Fresh session — clear counters AND remove from blocked list
         monitoringService.resetCountersForUser(username);
+        ApiLoggingInterceptor.unblockUser(username);
 
         String token = jwtUtil.generateToken(username);
 
         Map<String, Object> response = new HashMap<>();
         response.put("token", token);
-        response.put("username", username);
-        response.put("role", stored.role);
-        response.put("name", stored.name);
+        response.put("username", u.getUsername());
+        response.put("role", u.getRole());
+        response.put("name", u.getName());
         return response;
     }
 
@@ -117,23 +116,22 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Username 'admin' is reserved");
         }
-        if (users.containsKey(username)) {
+        if (userRepository.existsByUsername(username)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "This username is already taken");
         }
-        String emailLower = email.toLowerCase();
-        if (emailIndex.containsKey(emailLower)) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "This email is already registered");
         }
 
         // ---- create user ----
-        UserRecord rec = new UserRecord(password, name, email, "user");
-        users.put(username, rec);
-        emailIndex.put(emailLower, username);
+        User newUser = new User(username, password, name, email, "user");
+        userRepository.save(newUser);
 
-        // Brand-new user gets brand-new state (no leftover counters)
+        // Brand-new user — completely clean slate
         monitoringService.resetCountersForUser(username);
+        ApiLoggingInterceptor.unblockUser(username);
 
         String token = jwtUtil.generateToken(username);
 
@@ -152,29 +150,16 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         }
         String username = auth.getName();
-        UserRecord rec = users.get(username);
+        Optional<User> rec = userRepository.findByUsername(username);
+
         Map<String, Object> response = new HashMap<>();
         response.put("username", username);
-        response.put("role", rec == null ? "user" : rec.role);
-        response.put("name", rec == null ? username : rec.name);
+        response.put("role", rec.map(User::getRole).orElse("user"));
+        response.put("name", rec.map(User::getName).orElse(username));
         return response;
     }
 
-    // ---- helpers ----
     private static String trim(String s) {
         return s == null ? null : s.trim();
-    }
-
-    private static class UserRecord {
-        final String password;
-        final String name;
-        final String email;
-        final String role;
-        UserRecord(String password, String name, String email, String role) {
-            this.password = password;
-            this.name = name;
-            this.email = email;
-            this.role = role;
-        }
     }
 }

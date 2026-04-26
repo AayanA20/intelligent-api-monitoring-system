@@ -8,6 +8,11 @@ const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
+  const url = config.url || ''
+  // Never send Authorization on login/register
+  if (url.includes('/auth/login') || url.includes('/auth/register')) {
+    return config
+  }
   const token = localStorage.getItem('apg_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
