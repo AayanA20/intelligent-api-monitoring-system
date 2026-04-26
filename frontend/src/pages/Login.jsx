@@ -4,33 +4,65 @@ import { ShieldCheck, Activity, Zap, Eye, EyeOff, ArrowRight } from 'lucide-reac
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 
+// simple but reliable email pattern
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 export default function Login() {
-  const [name, setName] = useState('')
-const [email, setEmail] = useState('')
   const [mode, setMode] = useState('login')
-  const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('password')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const { login, register } = useAuth()
   const nav = useNavigate()
 
+  const switchMode = (next) => {
+    setMode(next)
+    setName('')
+    setEmail('')
+    setUsername('')
+    setPassword('')
+  }
+
   const onSubmit = async (e) => {
     e.preventDefault()
+
+    // ---- client-side validation ----
+    if (mode === 'register') {
+      if (!name.trim())     { toast.error('Please enter your full name'); return }
+      if (!EMAIL_RE.test(email.trim())) {
+        toast.error('Please enter a valid email address')
+        return
+      }
+      if (username.trim().length < 3) {
+        toast.error('Username must be at least 3 characters')
+        return
+      }
+      if (password.length < 4) {
+        toast.error('Password must be at least 4 characters')
+        return
+      }
+    }
+
     setSubmitting(true)
     try {
       if (mode === 'login') {
-        await login(username, password)
-        toast.success(`Welcome back, ${username}`)
+        const u = await login(username.trim(), password)
+        toast.success(`Welcome back, ${u.name || u.username}`)
+        nav(u.role === 'admin' ? '/' : '/abuse')
       } else {
-          await register(name, username, email, password)
-        toast.success(`Account created for ${username}`)
+        const u = await register(name.trim(), username.trim(), email.trim(), password)
+        toast.success(`Account created. Welcome, ${u.name || u.username}!`)
+        nav('/abuse')
       }
-      nav('/')
     } catch (err) {
+      const status = err.response?.status
       const msg = err.response?.data?.message || err.response?.data?.error
-                || (err.response?.status === 401 ? 'Invalid credentials'
-                  : err.response?.status === 409 ? 'Username already exists'
+                || (status === 401 ? 'Invalid credentials'
+                  : status === 409 ? 'This username or email is already registered'
+                  : status === 400 ? 'Please fill all fields correctly'
                   : 'Something went wrong')
       toast.error(msg)
     } finally {
@@ -40,6 +72,7 @@ const [email, setEmail] = useState('')
 
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2">
+      {/* LEFT brand panel */}
       <div className="hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-bg-soft via-bg to-bg-soft relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-brand/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
@@ -83,6 +116,7 @@ const [email, setEmail] = useState('')
         </div>
       </div>
 
+      {/* RIGHT auth panel */}
       <div className="flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="mb-8 lg:hidden flex items-center gap-3">
@@ -97,39 +131,45 @@ const [email, setEmail] = useState('')
           </h2>
           <p className="text-slate-400 mb-8">
             {mode === 'login'
-              ? 'Sign in to access the monitoring dashboard.'
-              : 'Register a new user — stored in memory for this demo.'}
+              ? 'Sign in to access the dashboard.'
+              : 'Register a new user account.'}
           </p>
-{mode === 'register' && (
-  <>
-    <div>
-      <label className="text-xs font-semibold text-slate-400 mb-2 block">
-        Full Name
-      </label>
-      <input
-        type="text"
-        className="input"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        required
-      />
-    </div>
 
-    <div>
-      <label className="text-xs font-semibold text-slate-400 mb-2 block">
-        Email
-      </label>
-      <input
-        type="email"
-        className="input"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-      />
-    </div>
-  </>
-)}
           <form onSubmit={onSubmit} className="space-y-4">
+
+            {mode === 'register' && (
+              <>
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="Your full name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    className="input"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+              </>
+            )}
+
             <div>
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">
                 Username
@@ -137,11 +177,11 @@ const [email, setEmail] = useState('')
               <input
                 type="text"
                 className="input"
-                placeholder="admin"
+                placeholder={mode === 'login' ? 'your username' : 'pick a unique username'}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                autoFocus
+                autoFocus={mode === 'login'}
               />
             </div>
 
@@ -157,6 +197,7 @@ const [email, setEmail] = useState('')
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  minLength={mode === 'register' ? 4 : undefined}
                 />
                 <button
                   type="button"
@@ -178,23 +219,18 @@ const [email, setEmail] = useState('')
             {mode === 'login' ? (
               <>
                 No account?{' '}
-                <button onClick={() => setMode('register')} className="text-brand-light hover:underline font-medium">
+                <button onClick={() => switchMode('register')} className="text-brand-light hover:underline font-medium">
                   Create one
                 </button>
               </>
             ) : (
               <>
                 Already have an account?{' '}
-                <button onClick={() => setMode('login')} className="text-brand-light hover:underline font-medium">
+                <button onClick={() => switchMode('login')} className="text-brand-light hover:underline font-medium">
                   Sign in
                 </button>
               </>
             )}
-          </div>
-
-          <div className="mt-10 p-4 rounded-lg bg-bg-soft border border-slate-800/60">
-            <p className="text-xs text-slate-500 mb-1 font-semibold uppercase tracking-wider">Demo credentials</p>
-            <p className="text-sm mono text-slate-300">admin / password</p>
           </div>
         </div>
       </div>

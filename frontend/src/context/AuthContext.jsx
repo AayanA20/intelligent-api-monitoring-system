@@ -7,66 +7,60 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
-useEffect(() => {
-  const saved = localStorage.getItem('apg_user')
+  // Restore session from localStorage on first load
+  useEffect(() => {
+    const saved = localStorage.getItem('apg_user')
+    const token = localStorage.getItem('apg_token')
 
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved)
-      setUser(parsed)
-    } catch (err) {
-      // 💥 Old invalid data (like "admin")
-      console.warn('Invalid stored user, clearing...')
-      localStorage.removeItem('apg_user')
+    if (saved && token) {
+      try {
+        const parsed = JSON.parse(saved)
+        setUser(parsed)
+      } catch {
+        // Old/corrupt entry — clear it
+        localStorage.removeItem('apg_user')
+        localStorage.removeItem('apg_token')
+      }
     }
-  }
+    setLoading(false)
+  }, [])
 
-  setLoading(false)
-}, [])
-
-  // 🔐 LOGIN
+  // 🔐 LOGIN — backend tells us role + issues JWT
   const login = async (username, password) => {
-    // ADMIN (hardcoded)
-    if (username === 'admin' && password === 'password') {
-      const userData = { username: 'admin', role: 'admin' }
-      localStorage.setItem('apg_user', JSON.stringify(userData))
-      setUser(userData)
-      return userData
-    }
-
-    // NORMAL USER (backend)
     const data = await API.login(username, password)
 
     const userData = {
       username: data.username,
-      role: 'user'
+      role:     data.role || 'user',
+      name:     data.name || data.username,
     }
 
-    localStorage.setItem('apg_user', JSON.stringify(userData))
+    localStorage.setItem('apg_token', data.token)
+    localStorage.setItem('apg_user',  JSON.stringify(userData))
     setUser(userData)
-
-    return data
+    return userData
   }
 
-  // 📝 REGISTER
+  // 📝 REGISTER — always becomes a normal user
   const register = async (name, username, email, password) => {
     const data = await API.register(name, username, email, password)
 
     const userData = {
       username: data.username,
-      role: 'user'
+      role:     data.role || 'user',
+      name:     data.name || name || username,
     }
 
-    localStorage.setItem('apg_user', JSON.stringify(userData))
+    localStorage.setItem('apg_token', data.token)
+    localStorage.setItem('apg_user',  JSON.stringify(userData))
     setUser(userData)
-
-    return data
+    return userData
   }
 
   // 🚪 LOGOUT
   const logout = () => {
-    localStorage.removeItem('apg_user')
     localStorage.removeItem('apg_token')
+    localStorage.removeItem('apg_user')
     setUser(null)
   }
 

@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import RoleRoute from './components/RoleRoute'
+import { useAuth } from './context/AuthContext'
 
 import Login from './pages/Login'
 import Overview from './pages/Overview'
@@ -9,6 +10,15 @@ import LiveLogs from './pages/LiveLogs'
 import AbuseTimeline from './pages/AbuseTimeline'
 import AttackSimulator from './pages/AttackSimulator'
 import About from './pages/About'
+
+/** When user lands on "/", send them to the right home for their role. */
+function RoleHome() {
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
+  return user.role === 'admin'
+    ? <Overview />
+    : <Navigate to="/abuse" replace />
+}
 
 export default function App() {
   return (
@@ -21,21 +31,17 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <Routes>
+                {/* Role-aware home */}
+                <Route path="/" element={<RoleHome />} />
 
-                {/* ADMIN */}
-                <Route path="/" element={
-                  <RoleRoute allowed={['admin']}>
-                    <Overview />
-                  </RoleRoute>
-                } />
-
+                {/* ADMIN-ONLY */}
                 <Route path="/logs" element={
                   <RoleRoute allowed={['admin']}>
                     <LiveLogs />
                   </RoleRoute>
                 } />
 
-                {/* USER */}
+                {/* USER-ONLY */}
                 <Route path="/abuse" element={
                   <RoleRoute allowed={['user']}>
                     <AbuseTimeline />
@@ -48,9 +54,10 @@ export default function App() {
                   </RoleRoute>
                 } />
 
-                {/* COMMON */}
+                {/* Both roles can see About */}
                 <Route path="/about" element={<About />} />
 
+                {/* Anything else -> home */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Layout>
