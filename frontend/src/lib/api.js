@@ -70,10 +70,6 @@ export const callPathTraversal = () =>
   api.get('/api/normal?path=../../etc/passwd&file=%2e%2e%2f%2e%2e%2fwindows/system32')
     .then(r => r.data).catch(e => ({ error: e.response?.status }))
 
-export const callCommandInjection = () =>
-  api.get('/api/normal?input=;ls+-la&cmd=|+cat+/etc/shadow&exec=$(whoami)')
-    .then(r => r.data).catch(e => ({ error: e.response?.status }))
-
 export const callBotUserAgent = () =>
   api.get('/api/normal', {
     headers: { 'User-Agent': 'sqlmap/1.7.8#stable (https://sqlmap.org)' }

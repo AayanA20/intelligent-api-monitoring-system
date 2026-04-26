@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import com.intelligentapi.monitoring.detection.RuleEngine;
+import com.intelligentapi.monitoring.interceptor.ApiLoggingInterceptor;
 import com.intelligentapi.monitoring.model.AbuseEvent;
 import com.intelligentapi.monitoring.model.ApiRequestLog;
 import com.intelligentapi.monitoring.repository.AbuseEventRepository;
@@ -23,19 +24,19 @@ public class MonitoringService {
     private final RuleEngine ruleEngine;
     private final ApiRequestLogRepository apiRequestLogRepository;
     private final AbuseEventRepository abuseEventRepository;
+    private final MLServiceClient mlServiceClient;
 
-    // Track requests per USER. Each user has an independent counter.
-    private final Map<String, Integer> requestCounter = new ConcurrentHashMap<>();
-
-    // Track heavy API usage per USER. Each user has an independent counter.
+    private final Map<String, Integer> requestCounter  = new ConcurrentHashMap<>();
     private final Map<String, Integer> heavyApiCounter = new ConcurrentHashMap<>();
 
     public MonitoringService(RuleEngine ruleEngine,
                              ApiRequestLogRepository apiRequestLogRepository,
-                             AbuseEventRepository abuseEventRepository) {
-        this.ruleEngine = ruleEngine;
+                             AbuseEventRepository abuseEventRepository,
+                             MLServiceClient mlServiceClient) {
+        this.ruleEngine              = ruleEngine;
         this.apiRequestLogRepository = apiRequestLogRepository;
-        this.abuseEventRepository = abuseEventRepository;
+        this.abuseEventRepository    = abuseEventRepository;
+        this.mlServiceClient         = mlServiceClient;
     }
 
     // ---------- Decision pipeline ----------
@@ -45,7 +46,6 @@ public class MonitoringService {
         requestCounter.put(user, requestCount);
 
         int heavyCalls = heavyApiCounter.getOrDefault(user, 0);
-
         if (endpoint.equals("/api/heavy")) {
             heavyCalls++;
             heavyApiCounter.put(user, heavyCalls);
@@ -55,17 +55,23 @@ public class MonitoringService {
         return ruleEngine.analyzeRequest(endpoint, requestCount, heavyCalls, botPattern);
     }
 
-    /** Resets ALL in-memory counters. Used by attack simulator's "Reset" button. */
+    /**
+     * Resets ALL counters, blocked users, and ML behavioral sessions.
+     * Called by the Attack Simulator "Reset counters" button.
+     */
     public void resetCounters() {
         requestCounter.clear();
         heavyApiCounter.clear();
+        // Clear permanently blocked users so simulator starts fresh
+        ApiLoggingInterceptor.blockedUsers.clear();
+        // Clear ML behavioral session history for all users
+        mlServiceClient.resetBehavioralSessions();
+        System.out.println("[MonitoringService] Full reset: counters, blocks, ML sessions.");
     }
 
     /**
-     * Resets counters for ONE specific user. Called when:
-     *  - A new user registers (so they don't inherit any leftover state)
-     *  - A user logs in (so their session starts fresh)
-     * Other users are unaffected.
+     * Resets counters for ONE user only.
+     * Called on login/register so new sessions start clean.
      */
     public void resetCountersForUser(String user) {
         if (user == null || user.isBlank()) return;
@@ -73,7 +79,7 @@ public class MonitoringService {
         heavyApiCounter.remove(user);
     }
 
-    // ---------- Existing analytics ----------
+    // ---------- Analytics ----------
 
     public List<ApiRequestLog> getSlowApis() {
         return apiRequestLogRepository.findByResponseTimeGreaterThan(2000L);
@@ -87,8 +93,6 @@ public class MonitoringService {
         return apiRequestLogRepository.getTopEndpoints();
     }
 
-    // ---------- Dashboard analytics ----------
-
     public List<ApiRequestLog> getRecentLogs(int limit) {
         return apiRequestLogRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(0, limit));
     }
@@ -101,22 +105,22 @@ public class MonitoringService {
         Instant oneHourAgo = Instant.now().minus(1, ChronoUnit.HOURS);
         Instant fiveMinAgo = Instant.now().minus(5, ChronoUnit.MINUTES);
 
-        long total = apiRequestLogRepository.count();
-        long lastHour = apiRequestLogRepository.countByCreatedAtAfter(oneHourAgo);
-        long abuseTotal = abuseEventRepository.count();
-        long blocked = abuseEventRepository.countByDecision("BLOCK");
-        long warned = abuseEventRepository.countByDecision("WARN");
-        long slowed = abuseEventRepository.countByDecision("SLOW");
+        long total       = apiRequestLogRepository.count();
+        long lastHour    = apiRequestLogRepository.countByCreatedAtAfter(oneHourAgo);
+        long abuseTotal  = abuseEventRepository.count();
+        long blocked     = abuseEventRepository.countByDecision("BLOCK");
+        long warned      = abuseEventRepository.countByDecision("WARN");
+        long slowed      = abuseEventRepository.countByDecision("SLOW");
         long activeUsers = apiRequestLogRepository.getActiveUsers(fiveMinAgo).size();
 
         Map<String, Object> stats = new LinkedHashMap<>();
-        stats.put("totalRequests", total);
+        stats.put("totalRequests",    total);
         stats.put("requestsLastHour", lastHour);
         stats.put("totalAbuseEvents", abuseTotal);
-        stats.put("blockedRequests", blocked);
-        stats.put("warnedRequests", warned);
-        stats.put("slowedRequests", slowed);
-        stats.put("activeUsers", activeUsers);
+        stats.put("blockedRequests",  blocked);
+        stats.put("warnedRequests",   warned);
+        stats.put("slowedRequests",   slowed);
+        stats.put("activeUsers",      activeUsers);
         return stats;
     }
 
@@ -127,13 +131,15 @@ public class MonitoringService {
         Map<LocalDateTime, Long> buckets = new TreeMap<>();
         for (ApiRequestLog log : recent) {
             if (log.getCreatedAt() == null) continue;
-            LocalDateTime minute = LocalDateTime.ofInstant(log.getCreatedAt(), ZoneId.systemDefault())
-                                                .truncatedTo(ChronoUnit.MINUTES);
+            LocalDateTime minute = LocalDateTime
+                .ofInstant(log.getCreatedAt(), ZoneId.systemDefault())
+                .truncatedTo(ChronoUnit.MINUTES);
             buckets.merge(minute, 1L, Long::sum);
         }
 
-        LocalDateTime start = LocalDateTime.ofInstant(cutoff, ZoneId.systemDefault())
-                                           .truncatedTo(ChronoUnit.MINUTES);
+        LocalDateTime start = LocalDateTime
+            .ofInstant(cutoff, ZoneId.systemDefault())
+            .truncatedTo(ChronoUnit.MINUTES);
         LocalDateTime end = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
 
         List<Map<String, Object>> result = new ArrayList<>();
@@ -141,7 +147,7 @@ public class MonitoringService {
         while (!cur.isAfter(end)) {
             Map<String, Object> point = new LinkedHashMap<>();
             point.put("minute", String.format("%02d:%02d", cur.getHour(), cur.getMinute()));
-            point.put("count", buckets.getOrDefault(cur, 0L));
+            point.put("count",  buckets.getOrDefault(cur, 0L));
             result.add(point);
             cur = cur.plusMinutes(1);
         }
@@ -162,23 +168,22 @@ public class MonitoringService {
     }
 
     public List<Map<String, Object>> getTopEndpointsFormatted(int limit) {
-        List<Object[]> rows = apiRequestLogRepository.getTopEndpoints();
-        return rows.stream()
-                   .limit(limit)
-                   .map(r -> {
-                       Map<String, Object> m = new LinkedHashMap<>();
-                       m.put("endpoint", r[0]);
-                       m.put("count", r[1]);
-                       return m;
-                   })
-                   .collect(Collectors.toList());
+        return apiRequestLogRepository.getTopEndpoints().stream()
+            .limit(limit)
+            .map(r -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("endpoint", r[0]);
+                m.put("count",    r[1]);
+                return m;
+            })
+            .collect(Collectors.toList());
     }
 
     private List<Map<String, Object>> toLabelCount(List<Object[]> rows, String labelKey) {
         return rows.stream().map(r -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put(labelKey, r[0]);
-            m.put("count", r[1]);
+            m.put("count",  r[1]);
             return m;
         }).collect(Collectors.toList());
     }

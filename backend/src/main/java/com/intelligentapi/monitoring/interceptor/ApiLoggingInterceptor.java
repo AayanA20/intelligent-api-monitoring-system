@@ -24,11 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class ApiLoggingInterceptor implements HandlerInterceptor {
 
-    // ✅ ONLY block by username. NO IP-based blocking — every user on
-    //    localhost shares 127.0.0.1, which means one bad user would
-    //    block every other user on the same machine.
-    public static final Set<String> blockedUsers =
-        ConcurrentHashMap.newKeySet();
+    // Block by username only — never by IP (localhost shares 127.0.0.1)
+    public static final Set<String> blockedUsers = ConcurrentHashMap.newKeySet();
 
     private final MonitoringService monitoringService;
     private final MLServiceClient mlServiceClient;
@@ -45,10 +42,6 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
         this.abuseRepository   = abuseRepository;
     }
 
-    /**
-     * Called by AuthController on login/register so a returning user
-     * (or a brand-new user on the same machine) starts with a clean slate.
-     */
     public static void unblockUser(String username) {
         if (username == null || username.isBlank()) return;
         blockedUsers.remove(username);
@@ -67,7 +60,7 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
         String ip       = request.getRemoteAddr();
 
         // Build full decoded URL including query params
-        String queryString = request.getQueryString();
+        String queryString  = request.getQueryString();
         String decodedQuery = "";
         if (queryString != null) {
             try {
@@ -83,21 +76,18 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
         request.setAttribute("user",     user);
         request.setAttribute("ip",       ip);
 
-        // ── Permanent block by USERNAME ONLY ──
-        // Anonymous users are never permanently blocked because that would
-        // affect everyone. They still go through the rule engine.
+        // ── Permanent block check (named users only) ──
         boolean isPermanentlyBlocked =
             !"anonymous".equals(user) && blockedUsers.contains(user);
 
         if (isPermanentlyBlocked) {
-            System.out.println("[BLOCKED] Permanent block hit: user=" + user);
+            System.out.println("[BLOCKED] Permanent block: user=" + user);
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.setContentType("application/json");
             response.getWriter().write(
                 "{\"error\":\"BLOCKED\",\"message\":\"Permanently blocked due to prior abuse.\"}"
             );
             saveLog(endpoint, method, user, "BLOCK", 0, 403, ip);
-            // Also save an abuse event so the user sees WHY they're blocked
             saveAbuseEvent(user, endpoint, ip, "BLOCK",
                 "Permanent block — prior abusive behavior");
             return false;
@@ -106,30 +96,28 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
         // ── Rule engine decision ──
         String ruleDecision = monitoringService.trackAndEvaluateRequest(user, endpoint);
 
-        // ── ML model decision ──
+        // ── ML model decision — pass username so sessions are per-user ──
         String mlDecision = mlServiceClient.getDecision(
-            method, fullUrl, Collections.emptyMap(), null, 200, null
+            method, fullUrl, Collections.emptyMap(),
+            null, 200, null, user   // ← user passed here
         );
 
-        // ── Merge: take the more severe of the two ──
+        // ── Merge: take more severe ──
         String decision = mergeDecisions(ruleDecision, mlDecision);
         request.setAttribute("decision", decision);
 
         System.out.println("[" + method + "] " + endpoint
             + " | user=" + user
-            + " | ip=" + ip
             + " | rule=" + ruleDecision
             + " | ml=" + mlDecision
             + " | final=" + decision);
 
-        // ── Permanently block ONLY this username if BLOCK ──
-        // Anonymous never gets added (would block everyone unauthenticated)
+        // ── Permanently block named users on BLOCK ──
         if ("BLOCK".equals(decision) && !"anonymous".equals(user)) {
             blockedUsers.add(user);
             System.out.println("[BLOCKED] Added to permanent block: user=" + user);
         }
 
-        // Persist abuse event for non-ALLOW decisions
         if (!"ALLOW".equals(decision)) {
             saveAbuseEvent(user, endpoint, ip, decision,
                 reasonFor(decision, endpoint, ruleDecision, mlDecision));
@@ -162,12 +150,11 @@ public class ApiLoggingInterceptor implements HandlerInterceptor {
             if (startTime == null) return;
 
             long responseTime = System.currentTimeMillis() - startTime;
-
-            String endpoint = (String) request.getAttribute("endpoint");
-            String method   = (String) request.getAttribute("method");
-            String user     = (String) request.getAttribute("user");
-            String ip       = (String) request.getAttribute("ip");
-            String decision = (String) request.getAttribute("decision");
+            String endpoint   = (String) request.getAttribute("endpoint");
+            String method     = (String) request.getAttribute("method");
+            String user       = (String) request.getAttribute("user");
+            String ip         = (String) request.getAttribute("ip");
+            String decision   = (String) request.getAttribute("decision");
 
             if (decision == null) decision = "ALLOW";
 
