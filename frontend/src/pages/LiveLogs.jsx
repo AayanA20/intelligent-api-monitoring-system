@@ -30,8 +30,8 @@ export default function LiveLogs() {
     <div className="space-y-6 animate-fade-in">
       <header className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Live Logs</h1>
-          <p className="text-slate-400 mt-1">Every API request, captured and analyzed in real time</p>
+          <h1 className="text-3xl font-bold tracking-tight text-text-primary">Live Logs</h1>
+          <p className="text-text-secondary mt-1">Every API request, captured and analyzed in real time</p>
         </div>
         <div className="flex items-center gap-3">
           <LiveIndicator />
@@ -44,7 +44,7 @@ export default function LiveLogs() {
       <ChartCard title="Request stream" subtitle={`${filtered.length} of ${data?.length ?? 0} requests`}>
         <div className="flex flex-col md:flex-row gap-3 mb-5">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
               placeholder="Search endpoint, user, or IP…"
@@ -53,7 +53,7 @@ export default function LiveLogs() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <div className="flex gap-1 p-1 bg-bg-soft border border-slate-700/60 rounded-lg">
+          <div className="flex gap-1 p-1 bg-bg-soft border border-bg-border rounded-lg">
             {DECISION_FILTERS.map(f => (
               <button
                 key={f}
@@ -61,7 +61,7 @@ export default function LiveLogs() {
                 className={`px-3 py-1.5 text-xs font-semibold rounded transition-all
                   ${decisionFilter === f
                     ? 'bg-brand text-white'
-                    : 'text-slate-400 hover:text-slate-200'}`}
+                    : 'text-text-secondary hover:text-text-primary'}`}
               >
                 {f}
               </button>
@@ -72,37 +72,37 @@ export default function LiveLogs() {
         <div className="overflow-x-auto -mx-6 px-6">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-800">
-                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Time</th>
-                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Method</th>
-                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Endpoint</th>
-                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">User</th>
-                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">IP</th>
-                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
-                <th className="text-right py-3 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Time (ms)</th>
-                <th className="text-right py-3 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Decision</th>
+              <tr className="border-b border-bg-border">
+                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-text-muted">Time</th>
+                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-text-muted">Method</th>
+                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-text-muted">Endpoint</th>
+                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-text-muted">User</th>
+                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-text-muted">IP</th>
+                <th className="text-left py-3 px-2 text-xs font-semibold uppercase tracking-wider text-text-muted">Status</th>
+                <th className="text-right py-3 px-2 text-xs font-semibold uppercase tracking-wider text-text-muted">Time (ms)</th>
+                <th className="text-right py-3 px-2 text-xs font-semibold uppercase tracking-wider text-text-muted">Decision</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                  <td colSpan={8} className="py-12 text-center text-text-muted">
                     <Filter className="w-5 h-5 inline mr-2 opacity-50" />
                     No logs match your filters
                   </td>
                 </tr>
               ) : (
                 filtered.map((log) => (
-                  <tr key={log.id} className="border-b border-slate-800/40 hover:bg-bg-hover/40 transition-colors">
-                    <td className="py-3 px-2 text-slate-400 mono text-xs">{formatTime(log.createdAt || log.timestamp)}</td>
+                  <tr key={log.id} className="border-b border-bg-border hover:bg-bg-soft transition-colors">
+                    <td className="py-3 px-2 text-text-muted mono text-xs">{formatTime(log.createdAt || log.timestamp)}</td>
                     <td className="py-3 px-2">
                       <span className="badge-muted mono">{log.method || '—'}</span>
                     </td>
-                    <td className="py-3 px-2 mono text-slate-200">{log.endpoint}</td>
-                    <td className="py-3 px-2 text-slate-300">{log.userName || <span className="text-slate-600">—</span>}</td>
-                    <td className="py-3 px-2 text-slate-400 mono text-xs">{log.ipAddress || '—'}</td>
+                    <td className="py-3 px-2 mono text-text-primary">{log.endpoint}</td>
+                    <td className="py-3 px-2 text-text-secondary">{log.userName || <span className="text-text-muted">—</span>}</td>
+                    <td className="py-3 px-2 text-text-muted mono text-xs">{log.ipAddress || '—'}</td>
                     <td className="py-3 px-2"><StatusBadge code={log.statusCode} /></td>
-                    <td className="py-3 px-2 text-right text-slate-300 mono">{log.responseTime}</td>
+                    <td className="py-3 px-2 text-right text-text-secondary mono">{log.responseTime}</td>
                     <td className="py-3 px-2 text-right"><DecisionBadge value={log.decision} /></td>
                   </tr>
                 ))

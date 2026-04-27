@@ -5,62 +5,88 @@ export default {
     "./src/**/*.{js,jsx}",
   ],
   theme: {
+    colors: {
+      transparent: 'transparent',
+      current: 'currentColor',
+      white: '#ffffff',
+      black: '#000000',
+      
+      // Background colors - LIGHT THEME
+      bg: {
+        DEFAULT: '#f8fafc',
+        soft: '#f1f5f9',
+        card: '#ffffff',
+        hover: '#f0f4f8',
+        border: '#e2e8f0',
+      },
+      
+      // Brand color - TEAL
+      brand: {
+        DEFAULT: '#0891b2',
+        hover: '#0e7490',
+        light: '#06b6d4',
+        pale: '#cffafe',
+        dark: '#164e63',
+      },
+      
+      // Text colors
+      text: {
+        primary: '#1e293b',
+        secondary: '#64748b',
+        muted: '#94a3b8',
+      },
+      
+      // Status colors
+      success: {
+        DEFAULT: '#10b981',
+        light: '#d1fae5',
+        dark: '#047857',
+      },
+      
+      warn: {
+        DEFAULT: '#f59e0b',
+        light: '#fef3c7',
+        dark: '#d97706',
+      },
+      
+      danger: {
+        DEFAULT: '#ef4444',
+        light: '#fee2e2',
+        dark: '#dc2626',
+      },
+      
+      info: {
+        DEFAULT: '#3b82f6',
+        light: '#dbeafe',
+        dark: '#1d4ed8',
+      },
+      
+      // Slate grays
+      slate: {
+        50: '#f8fafc',
+        100: '#f1f5f9',
+        200: '#e2e8f0',
+        300: '#cbd5e1',
+        400: '#94a3b8',
+        500: '#64748b',
+        600: '#475569',
+        700: '#334155',
+        800: '#1e293b',
+        900: '#0f172a',
+      },
+    },
+    fontFamily: {
+      sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+      mono: ['Fira Code', 'Menlo', 'monospace'],
+    },
     extend: {
-      fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['Fira Code', 'Menlo', 'monospace'],
-      },
-      colors: {
-        // ── Modern Light/Clean Palette ────────────────────────────────────
-        bg: {
-          DEFAULT: '#f8fafc',          // off-white
-          soft:    '#f1f5f9',          // very light gray
-          card:    '#ffffff',          // pure white cards
-          hover:   '#f0f4f8',          // subtle hover
-          border:  '#e2e8f0',          // light borders
-        },
-        brand: {
-          DEFAULT: '#0891b2',          // cyan-600 (teal)
-          hover:   '#0e7490',          // darker teal
-          light:   '#06b6d4',          // bright cyan
-          pale:    '#cffafe',          // very light cyan
-          dark:    '#164e63',          // deep teal
-        },
-        // ── Semantic Colors ───────────────────────────────────────────────
-        success: {
-          DEFAULT: '#10b981',          // emerald
-          light:   '#d1fae5',
-          dark:    '#047857',
-        },
-        warn: {
-          DEFAULT: '#f59e0b',          // amber
-          light:   '#fef3c7',
-          dark:    '#d97706',
-        },
-        danger: {
-          DEFAULT: '#ef4444',          // red
-          light:   '#fee2e2',
-          dark:    '#dc2626',
-        },
-        info: {
-          DEFAULT: '#3b82f6',          // blue
-          light:   '#dbeafe',
-          dark:    '#1d4ed8',
-        },
-        // ── Text Colors ───────────────────────────────────────────────────
-        text: {
-          primary:   '#1e293b',        // dark slate
-          secondary: '#64748b',        // medium slate
-          muted:     '#94a3b8',        // light slate
-        },
-      },
       boxShadow: {
-        'soft':     '0 1px 3px 0 rgb(0 0 0 / 0.08)',
-        'sm':       '0 2px 6px 0 rgb(0 0 0 / 0.08)',
-        'base':     '0 4px 12px 0 rgb(0 0 0 / 0.08)',
-        'md':       '0 6px 16px 0 rgb(0 0 0 / 0.1)',
-        'lg':       '0 10px 24px 0 rgb(0 0 0 / 0.1)',
-        'glow':     '0 0 20px 0 rgb(6 182 212 / 0.3)',
+        'soft': '0 1px 3px 0 rgb(0 0 0 / 0.08)',
+        'sm': '0 2px 6px 0 rgb(0 0 0 / 0.08)',
+        'base': '0 4px 12px 0 rgb(0 0 0 / 0.08)',
+        'md': '0 6px 16px 0 rgb(0 0 0 / 0.1)',
+        'lg': '0 10px 24px 0 rgb(0 0 0 / 0.1)',
+        'glow': '0 0 20px 0 rgb(6 182 212 / 0.3)',
       },
       animation: {
         'pulse-soft': 'pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
