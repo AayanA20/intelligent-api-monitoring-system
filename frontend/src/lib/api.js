@@ -9,7 +9,6 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const url = config.url || ''
-  // Never send Authorization on login/register
   if (url.includes('/auth/login') || url.includes('/auth/register')) {
     return config
   }
@@ -33,7 +32,7 @@ api.interceptors.response.use(
 )
 
 // AUTH
-export const login = (username, password) =>
+export const login    = (username, password) =>
   api.post('/auth/login', { username, password }).then(r => r.data)
 
 export const register = (name, username, email, password) =>
@@ -61,7 +60,7 @@ export const callNormal = () =>
 export const callHeavy = () =>
   api.get('/api/heavy').then(r => r.data).catch(e => ({ error: e.response?.status }))
 
-// ── ML Attack Simulations ─────────────────────────────────────────────────────
+// ── Pattern-Based Attack Simulations ──────────────────────────────────────────
 export const callSQLInjection = () =>
   api.get("/api/normal?id=1' OR 1=1--&search=1 UNION SELECT * FROM users")
     .then(r => r.data).catch(e => ({ error: e.response?.status }))
@@ -69,11 +68,6 @@ export const callSQLInjection = () =>
 export const callPathTraversal = () =>
   api.get('/api/normal?path=../../etc/passwd&file=%2e%2e%2f%2e%2e%2fwindows/system32')
     .then(r => r.data).catch(e => ({ error: e.response?.status }))
-
-export const callBotUserAgent = () =>
-  api.get('/api/normal', {
-    headers: { 'User-Agent': 'sqlmap/1.7.8#stable (https://sqlmap.org)' }
-  }).then(r => r.data).catch(e => ({ error: e.response?.status }))
 
 export const callXSSAttack = () =>
   api.get('/api/normal?q=<script>alert(1)</script>&input=<iframe+src=javascript:alert(1)>')

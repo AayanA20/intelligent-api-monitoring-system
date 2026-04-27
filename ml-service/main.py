@@ -28,7 +28,6 @@ try:
     model = torch.load(MODEL_PATH, map_location="cpu", weights_only=False)
     model.eval()
     print("✅ Model loaded successfully:", type(model))
-    print(model)
 except Exception as e:
     print(f"❌ Model loading failed: {e}")
     raise
@@ -38,12 +37,10 @@ from minor_ml_models2 import ModelUtils
 utils = ModelUtils()
 
 # ── Step 5: Per-user request counter ──────────────────────────────────────────
-# Tracks how many requests each user has made so we don't score behaviorally
-# until there's enough history. Prevents false positives on new users.
 _user_request_counts = defaultdict(int)
 _counter_lock = Lock()
 
-MIN_REQUESTS_FOR_ML_SCORE = 10  # don't run ML model until user has 10+ requests
+MIN_REQUESTS_FOR_ML_SCORE = 10
 
 def increment_and_get(user: str) -> int:
     with _counter_lock:
@@ -54,10 +51,10 @@ def reset_all_counters():
     with _counter_lock:
         _user_request_counts.clear()
 
-# ── Step 6: Attack pattern overrides ─────────────────────────────────────────
+# ── Step 6: Attack pattern detection ──────────────────────────────────────────
+# Removed command injection patterns — focus on SQL, XSS, path traversal, scanners
 PATTERN_OVERRIDES = {
     'BLOCK': [
-        re.compile(r'(;|\||\`|\$\()\s*(ls|cat|rm|wget|curl|bash|sh|python|nc)\b', re.IGNORECASE),
         re.compile(r'\.\.\/|\.\.\\|%2e%2e|etc\/passwd|windows\.ini', re.IGNORECASE),
         re.compile(r'eval\(|exec\(|system\(|\/bin\/sh|passthru', re.IGNORECASE),
         re.compile(r'\$\{|jndi:|ldap://|rmi://', re.IGNORECASE),
@@ -79,7 +76,7 @@ class RequestData(BaseModel):
     body:          str  = ""
     status_code:   int  = 200
     response_body: str  = ""
-    user:          str  = "anonymous"   # ← per-user tracking
+    user:          str  = "anonymous"
 
 @app.post("/predict")
 def predict(req: RequestData):
@@ -93,12 +90,12 @@ def predict(req: RequestData):
         # ── Content patterns — fire immediately on ANY request ──
         for pattern in PATTERN_OVERRIDES['BLOCK']:
             if pattern.search(attack_surface) or pattern.search(ua):
-                print(f"[predict] BLOCK override: {pattern.pattern[:50]}")
+                print(f"[predict] BLOCK pattern: {pattern.pattern[:50]}")
                 return {"score": 0.95, "label": "BLOCK", "reason": "content_pattern"}
 
         for pattern in PATTERN_OVERRIDES['WARN']:
             if pattern.search(attack_surface) or pattern.search(ua):
-                print(f"[predict] WARN override: {pattern.pattern[:50]}")
+                print(f"[predict] WARN pattern: {pattern.pattern[:50]}")
                 return {"score": 0.65, "label": "WARN", "reason": "content_pattern"}
 
         # ── Per-user request count ──
@@ -107,7 +104,7 @@ def predict(req: RequestData):
         # Not enough history — return ALLOW immediately
         if count < MIN_REQUESTS_FOR_ML_SCORE:
             print(f"[predict] user={req.user} count={count} "
-                  f"(need {MIN_REQUESTS_FOR_ML_SCORE}) → ALLOW (insufficient history)")
+                  f"(need {MIN_REQUESTS_FOR_ML_SCORE}) → ALLOW")
             return {"score": 0.0, "label": "ALLOW", "reason": "insufficient_history"}
 
         # ── ML model score ──
@@ -142,7 +139,7 @@ def health():
 
 @app.post("/reset")
 def reset():
-    """Called when Spring Boot resets counters — clears per-user ML history too."""
+    """Called when Spring Boot resets counters."""
     reset_all_counters()
     print("[reset] All user ML request counters cleared.")
     return {"status": "reset", "message": "All user ML sessions cleared"}

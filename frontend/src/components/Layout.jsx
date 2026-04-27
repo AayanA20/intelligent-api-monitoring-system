@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 
 export default function Layout({ children }) {
-  const { user, logout } = useAuth()   // ✅ correct place
+  const { user, logout } = useAuth()
   const nav = useNavigate()
 
   const onLogout = () => {
@@ -15,7 +15,6 @@ export default function Layout({ children }) {
     nav('/login')
   }
 
-  // ✅ navItems MUST be inside component
   const navItems = user?.role === 'admin'
     ? [
         { to: '/', label: 'Overview', icon: LayoutDashboard },
@@ -29,22 +28,25 @@ export default function Layout({ children }) {
       ]
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-64 bg-bg-soft border-r border-slate-800/60 flex flex-col fixed h-screen">
-        <div className="p-6 border-b border-slate-800/60">
+    <div className="flex min-h-screen bg-bg">
+      {/* Sidebar */}
+      <aside className="w-72 bg-bg-card border-r border-bg-border flex flex-col fixed h-screen shadow-sm">
+        {/* Header */}
+        <div className="p-6 border-b border-bg-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center glow">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-light to-brand flex items-center justify-center glow">
               <ShieldCheck className="w-5 h-5 text-white" strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="font-bold text-lg leading-tight">API Guardian</h1>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">
-                Abuse Detection
+              <h1 className="font-bold text-lg text-text-primary">API Guardian</h1>
+              <p className="text-[10px] text-text-muted uppercase tracking-wider">
+                Security Monitor
               </p>
             </div>
           </div>
         </div>
 
+        {/* Navigation */}
         <nav className="flex-1 px-3 py-5 space-y-1">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
@@ -55,8 +57,8 @@ export default function Layout({ children }) {
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
                  ${
                    isActive
-                     ? 'bg-brand/15 text-brand-light border border-brand/20'
-                     : 'text-slate-400 hover:text-slate-200 hover:bg-bg-hover border border-transparent'
+                     ? 'bg-brand/10 text-brand border border-brand/20 shadow-soft'
+                     : 'text-text-secondary hover:text-text-primary hover:bg-bg-soft border border-transparent'
                  }`
               }
             >
@@ -66,23 +68,24 @@ export default function Layout({ children }) {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-slate-800/60">
+        {/* User Profile */}
+        <div className="p-4 border-t border-bg-border">
           <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-sm font-bold">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-light to-brand flex items-center justify-center text-sm font-bold text-white">
               {user?.username?.[0]?.toUpperCase() || 'U'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">
+              <p className="text-sm font-semibold text-text-primary truncate">
                 {user?.username}
               </p>
-              <p className="text-xs text-slate-500 flex items-center gap-1">
-                <Circle className="w-1.5 h-1.5 fill-success text-success dot-pulse" />
+              <p className="text-xs text-text-muted flex items-center gap-1">
+                <Circle className="w-1.5 h-1.5 fill-success text-success" />
                 Online
               </p>
             </div>
             <button
               onClick={onLogout}
-              className="p-2 rounded-lg text-slate-400 hover:text-danger hover:bg-danger/10 transition-all"
+              className="p-2 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-all"
               title="Logout"
             >
               <LogOut className="w-4 h-4" />
@@ -91,8 +94,11 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      <main className="flex-1 ml-64 p-8 max-w-[1600px]">
-        {children}
+      {/* Main Content */}
+      <main className="flex-1 ml-72 p-8">
+        <div className="max-w-7xl">
+          {children}
+        </div>
       </main>
     </div>
   )

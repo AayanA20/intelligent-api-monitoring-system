@@ -1,10 +1,10 @@
 export default function StatCard({ icon: Icon, label, value, accent = 'brand', trend }) {
   const accents = {
-    brand:   'text-brand-light   bg-brand/10   border-brand/20',
-    success: 'text-success       bg-success/10 border-success/20',
-    warn:    'text-warn          bg-warn/10    border-warn/20',
-    danger:  'text-danger        bg-danger/10  border-danger/20',
-    info:    'text-info          bg-info/10    border-info/20',
+    brand:   'text-brand       bg-brand-pale   border-brand/20',
+    success: 'text-success     bg-success-light border-success/20',
+    warn:    'text-warn        bg-warn-light    border-warn/20',
+    danger:  'text-danger      bg-danger-light  border-danger/20',
+    info:    'text-info        bg-info-light    border-info/20',
   }
   return (
     <div className="card card-hover animate-fade-in">
@@ -18,8 +18,8 @@ export default function StatCard({ icon: Icon, label, value, accent = 'brand', t
           </span>
         )}
       </div>
-      <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5">{label}</p>
-      <p className="text-3xl font-bold tracking-tight">{value ?? '—'}</p>
+      <p className="text-xs uppercase tracking-wider text-text-muted font-semibold mb-1.5">{label}</p>
+      <p className="text-3xl font-bold tracking-tight text-text-primary">{value ?? '—'}</p>
     </div>
   )
 }

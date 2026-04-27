@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, Activity, Zap, Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { ShieldCheck, Activity, Zap, Eye, EyeOff, ArrowRight, Lock, Mail, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 
@@ -44,7 +44,6 @@ export default function Login() {
         nav('/abuse')
       }
     } catch (err) {
-      // 🔍 Show the REAL error so we can debug
       console.error('LOGIN ERROR FULL:', err)
       console.error('Response data:', err.response?.data)
       console.error('Status:', err.response?.status)
@@ -78,115 +77,133 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2">
-      <div className="hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-bg-soft via-bg to-bg-soft relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-brand/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-bg">
+      {/* Left side - Feature showcase */}
+      <div className="hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-brand-dark via-brand-dark to-brand/80 relative overflow-hidden">
+        {/* Decorative elements */}
+        <div className="absolute top-20 -right-20 w-96 h-96 bg-brand-light/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-brand-light/5 rounded-full blur-3xl" />
 
         <div className="relative z-10">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center glow">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-light to-brand flex items-center justify-center glow">
               <ShieldCheck className="w-6 h-6 text-white" strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="font-bold text-xl">API Guardian</h1>
-              <p className="text-xs text-slate-500 uppercase tracking-widest">Abuse Detection</p>
+              <h1 className="font-bold text-xl text-white">API Guardian</h1>
+              <p className="text-xs text-brand-light/70 uppercase tracking-widest">Security Monitoring</p>
             </div>
           </div>
         </div>
 
         <div className="relative z-10 space-y-10">
           <div>
-            <h2 className="text-4xl font-bold leading-tight mb-4">
+            <h2 className="text-4xl font-bold leading-tight mb-4 text-white">
               Intelligent API Usage<br />
-              <span className="gradient-text">Monitoring & Abuse Detection</span>
+              <span className="text-brand-light">Monitoring & Protection</span>
             </h2>
-            <p className="text-slate-400 text-lg">
-              Real-time behavior analysis, rule-based detection, and ML-powered
-              anomaly scoring for modern backend services.
+            <p className="text-brand-light/80 text-lg leading-relaxed">
+              Real-time behavioral analysis, pattern-based detection, and intelligent
+              response system for securing your backend infrastructure.
             </p>
           </div>
 
           <div className="space-y-4">
-            <Feature icon={Activity} title="Live traffic monitoring" desc="Every request is captured, scored, and persisted." />
-            <Feature icon={ShieldCheck} title="Behavioral rule engine" desc="Detects endpoint looping, expensive-API abuse, and bots." />
-            <Feature icon={Zap} title="Intelligent responses" desc="Warn, slow down, or block abusive users automatically." />
+            <Feature icon={Activity} title="Live traffic monitoring" desc="Every request captured, analyzed, and persisted." />
+            <Feature icon={ShieldCheck} title="Behavioral detection" desc="Spot looping, abuse patterns, and bot activity instantly." />
+            <Feature icon={Zap} title="Smart responses" desc="Warn, throttle, or block threats automatically." />
           </div>
         </div>
 
-        <div className="relative z-10 text-xs text-slate-500">
+        <div className="relative z-10 text-xs text-brand-light/60">
           Minor Project · JK Lakshmipat University
         </div>
       </div>
 
+      {/* Right side - Auth form */}
       <div className="flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="mb-8 lg:hidden flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-light to-brand flex items-center justify-center">
               <ShieldCheck className="w-5 h-5 text-white" />
             </div>
-            <h1 className="font-bold text-lg">API Guardian</h1>
+            <div>
+              <h1 className="font-bold text-lg text-text-primary">API Guardian</h1>
+              <p className="text-xs text-text-muted">Security Monitoring</p>
+            </div>
           </div>
 
-          <h2 className="text-3xl font-bold mb-2">
-            {mode === 'login' ? 'Welcome back' : 'Create account'}
-          </h2>
-          <p className="text-slate-400 mb-8">
-            {mode === 'login' ? 'Sign in to access the dashboard.' : 'Register a new user account.'}
-          </p>
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold text-text-primary mb-2">
+              {mode === 'login' ? 'Welcome back' : 'Create account'}
+            </h2>
+            <p className="text-text-secondary">
+              {mode === 'login' ? 'Sign in to access your dashboard.' : 'Register a new account to get started.'}
+            </p>
+          </div>
 
           <form onSubmit={onSubmit} className="space-y-4">
             {mode === 'register' && (
               <>
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Full Name</label>
-                  <input type="text" className="input" placeholder="Your full name"
-                         value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+                  <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2 block">Full Name</label>
+                  <div className="relative">
+                    <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                    <input type="text" className="input pl-10" placeholder="Your full name"
+                           value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+                  </div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Email</label>
-                  <input type="email" className="input" placeholder="you@example.com"
-                         value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2 block">Email</label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                    <input type="email" className="input pl-10" placeholder="you@example.com"
+                           value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  </div>
                 </div>
               </>
             )}
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Username</label>
-              <input type="text" className="input"
-                     placeholder={mode === 'login' ? 'your username' : 'pick a unique username'}
-                     value={username} onChange={(e) => setUsername(e.target.value)}
-                     required autoFocus={mode === 'login'} />
+              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2 block">Username</label>
+              <div className="relative">
+                <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input type="text" className="input pl-10"
+                       placeholder={mode === 'login' ? 'your username' : 'pick a unique username'}
+                       value={username} onChange={(e) => setUsername(e.target.value)}
+                       required autoFocus={mode === 'login'} />
+              </div>
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Password</label>
+              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2 block">Password</label>
               <div className="relative">
-                <input type={showPw ? 'text' : 'password'} className="input pr-11"
+                <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input type={showPw ? 'text' : 'password'} className="input pl-10 pr-11"
                        placeholder="••••••••" value={password}
                        onChange={(e) => setPassword(e.target.value)}
                        required minLength={mode === 'register' ? 4 : undefined} />
                 <button type="button" onClick={() => setShowPw(v => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors">
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            <button type="submit" disabled={submitting} className="btn-primary w-full mt-2">
+            <button type="submit" disabled={submitting} className="btn-primary w-full mt-6">
               {submitting ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-slate-400">
+          <div className="mt-6 text-center text-sm text-text-secondary">
             {mode === 'login' ? (
               <>No account?{' '}
-                <button onClick={() => switchMode('register')} className="text-brand-light hover:underline font-medium">Create one</button>
+                <button onClick={() => switchMode('register')} className="text-brand hover:underline font-medium transition-colors">Create one</button>
               </>
             ) : (
               <>Already have an account?{' '}
-                <button onClick={() => switchMode('login')} className="text-brand-light hover:underline font-medium">Sign in</button>
+                <button onClick={() => switchMode('login')} className="text-brand hover:underline font-medium transition-colors">Sign in</button>
               </>
             )}
           </div>
@@ -199,12 +216,12 @@ export default function Login() {
 function Feature({ icon: Icon, title, desc }) {
   return (
     <div className="flex gap-4">
-      <div className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center flex-shrink-0">
+      <div className="w-10 h-10 rounded-lg bg-brand-light/20 flex items-center justify-center flex-shrink-0">
         <Icon className="w-5 h-5 text-brand-light" />
       </div>
       <div>
-        <h4 className="font-semibold text-slate-200">{title}</h4>
-        <p className="text-sm text-slate-500">{desc}</p>
+        <h4 className="font-semibold text-white">{title}</h4>
+        <p className="text-sm text-brand-light/70">{desc}</p>
       </div>
     </div>
   )

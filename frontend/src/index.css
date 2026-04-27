@@ -1,2 +1,142 @@
-/* Tailwind loads via CDN in index.html */
-/* This file kept minimal to avoid conflicts */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* ── CSS Variables for Theme ──────────────────────────────────────────── */
+:root {
+  --color-brand: #0891b2;
+  --color-brand-hover: #0e7490;
+  --color-success: #10b981;
+  --color-warn: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
+  --shadow-soft: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  --shadow-base: 0 4px 12px 0 rgb(0 0 0 / 0.08);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-bg text-text-primary font-sans;
+  line-height: 1.6;
+}
+
+* {
+  @apply transition-colors duration-150;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  @apply font-semibold tracking-tight;
+}
+
+h1 { @apply text-4xl; }
+h2 { @apply text-3xl; }
+h3 { @apply text-xl; }
+
+.btn {
+  @apply inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-primary {
+  @apply btn bg-brand hover:bg-brand-hover text-white shadow-sm hover:shadow-base;
+}
+
+.btn-secondary {
+  @apply btn bg-bg-soft hover:bg-bg-hover text-text-primary border border-bg-border shadow-soft;
+}
+
+.btn-danger {
+  @apply btn bg-danger hover:bg-danger-dark text-white shadow-sm hover:shadow-base;
+}
+
+.btn-success {
+  @apply btn bg-success hover:bg-success-dark text-white shadow-sm hover:shadow-base;
+}
+
+.input {
+  @apply w-full px-3.5 py-2.5 rounded-lg border border-bg-border bg-bg-card text-text-primary placeholder-text-muted;
+  @apply focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand;
+  @apply transition-all duration-200;
+}
+
+.input:hover {
+  @apply border-text-muted;
+}
+
+.card {
+  @apply bg-bg-card rounded-xl border border-bg-border shadow-soft p-6;
+}
+
+.card-hover {
+  @apply hover:shadow-base hover:border-bg-border/60 cursor-pointer;
+}
+
+.card-interactive {
+  @apply card-hover hover:bg-bg-soft;
+}
+
+.badge {
+  @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold;
+}
+
+.badge-success {
+  @apply badge bg-success-light text-success-dark border border-success/20;
+}
+
+.badge-warn {
+  @apply badge bg-warn-light text-warn-dark border border-warn/20;
+}
+
+.badge-danger {
+  @apply badge bg-danger-light text-danger-dark border border-danger/20;
+}
+
+.badge-info {
+  @apply badge bg-info-light text-info-dark border border-info/20;
+}
+
+.badge-muted {
+  @apply badge bg-bg-soft text-text-muted border border-bg-border;
+}
+
+.badge-brand {
+  @apply badge bg-brand-pale text-brand-dark border border-brand/20;
+}
+
+.gradient-text {
+  @apply bg-gradient-to-r from-brand to-brand-hover bg-clip-text text-transparent;
+}
+
+.glow {
+  box-shadow: 0 0 20px rgb(6 182 212 / 0.2);
+}
+
+.dot-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.mono {
+  @apply font-mono text-sm;
+}
+
+.page-container {
+  @apply max-w-7xl mx-auto;
+}
+
+.section-spacing {
+  @apply space-y-8;
+}
+
+::-webkit-scrollbar {
+  @apply w-2;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-bg-soft;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-bg-border hover:bg-text-muted rounded-full;
+}
