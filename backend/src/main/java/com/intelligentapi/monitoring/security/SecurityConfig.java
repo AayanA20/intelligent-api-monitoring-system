@@ -3,6 +3,7 @@ package com.intelligentapi.monitoring.security;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -20,9 +21,17 @@ public class SecurityConfig {
         this.jwtFilter = jwtFilter;
     }
 
+    /**
+     * BCryptPasswordEncoder bean — strength 12 is secure but fast enough.
+     * Injected into AuthController for hashing and verifying passwords.
+     */
+    @Bean
+    public BCryptPasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(12);
+    }
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
@@ -31,7 +40,6 @@ public class SecurityConfig {
                 .requestMatchers("/hello").permitAll()
                 .requestMatchers("/api/log-request").permitAll()
                 .requestMatchers("/analytics/**").permitAll()
-                // /auth/me requires authentication (default)
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
@@ -42,7 +50,6 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // Vite dev server is 5173; CRA is 3000. Include both.
         config.setAllowedOrigins(List.of(
             "http://localhost:5173",
             "http://localhost:3000",
