@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+const BASE_URL = 'https://your-backend.onrender.com'
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -53,14 +53,14 @@ export const getSlowApis             = ()             => api.get('/analytics/slo
 export const getFailedApis           = ()             => api.get('/analytics/failed-apis').then(r => r.data)
 export const resetCounters           = ()             => api.post('/analytics/reset-counters').then(r => r.data)
 
-// DEMO APIs
+// DEMO APIs — normal usage
 export const callNormal = () =>
   api.get('/api/normal').then(r => r.data).catch(e => ({ error: e.response?.status }))
 
 export const callHeavy = () =>
   api.get('/api/heavy').then(r => r.data).catch(e => ({ error: e.response?.status }))
 
-// Pattern-Based Attack Simulations
+// ── Pattern-Based Attack Simulations ──────────────────────────────────────────
 export const callSQLInjection = () =>
   api.get("/api/normal?id=1' OR 1=1--&search=1 UNION SELECT * FROM users")
     .then(r => r.data).catch(e => ({ error: e.response?.status }))

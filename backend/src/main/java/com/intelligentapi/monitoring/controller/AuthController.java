@@ -1,144 +1,165 @@
 package com.intelligentapi.monitoring.controller;
 
+import com.intelligentapi.monitoring.interceptor.ApiLoggingInterceptor;
 import com.intelligentapi.monitoring.model.User;
 import com.intelligentapi.monitoring.repository.UserRepository;
 import com.intelligentapi.monitoring.security.JwtUtil;
+import com.intelligentapi.monitoring.service.MonitoringService;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
-/**
- * Auth endpoints:
- *   POST /auth/register  → creates user in PostgreSQL with BCrypt password
- *   POST /auth/login     → verifies against DB, returns JWT
- *   GET  /auth/me        → returns current user info from JWT
- */
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
 
-    private final JwtUtil              jwtUtil;
-    private final UserRepository       userRepository;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private static final Pattern EMAIL_RE =
+            Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
 
-    public AuthController(JwtUtil jwtUtil, UserRepository userRepository,
-                          BCryptPasswordEncoder passwordEncoder) {
-        this.jwtUtil         = jwtUtil;
-        this.userRepository  = userRepository;
-        this.passwordEncoder = passwordEncoder;
+    private final JwtUtil jwtUtil;
+    private final MonitoringService monitoringService;
+    private final UserRepository userRepository;
 
-        // Seed default admin if not already in DB
-        seedAdmin();
+    public AuthController(JwtUtil jwtUtil,
+                          MonitoringService monitoringService,
+                          UserRepository userRepository) {
+        this.jwtUtil = jwtUtil;
+        this.monitoringService = monitoringService;
+        this.userRepository = userRepository;
     }
 
-    // ── Register ──────────────────────────────────────────────────────
-    @PostMapping("/register")
-    public Map<String, Object> register(@RequestBody Map<String, String> body) {
-        String name     = body.getOrDefault("name", "").trim();
-        String username = body.getOrDefault("username", "").trim();
-        String email    = body.getOrDefault("email", "").trim();
-        String password = body.getOrDefault("password", "");
-
-        // Validation
-        if (username.isBlank() || password.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "username and password required");
+    /**
+     * Seed the admin user on startup if they don't already exist.
+     * This runs ONCE per app start. The admin row stays in the DB after that.
+     */
+    @PostConstruct
+    public void seedAdmin() {
+        if (!userRepository.existsByUsername("admin")) {
+            User admin = new User("admin", "password", "Administrator",
+                                  "admin@apg.local", "admin");
+            userRepository.save(admin);
+            System.out.println("[AuthController] Admin user seeded");
         }
-        if (username.length() < 3) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "username must be at least 3 characters");
-        }
-        if (password.length() < 4) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "password must be at least 4 characters");
-        }
-        if (userRepository.existsByUsername(username)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "username already taken");
-        }
-        if (!email.isBlank() && userRepository.existsByEmail(email)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "email already registered");
-        }
-
-        // Save user with BCrypt hashed password
-        User user = new User(
-            name.isBlank() ? username : name,
-            username,
-            email.isBlank() ? null : email,
-            passwordEncoder.encode(password),   // ← BCrypt hash
-            "user"
-        );
-        userRepository.save(user);
-
-        String token = jwtUtil.generateToken(username);
-        return buildResponse(user, token);
     }
 
-    // ── Login ─────────────────────────────────────────────────────────
     @PostMapping("/login")
     public Map<String, Object> login(@RequestBody Map<String, String> body) {
-        String username = body.getOrDefault("username", "").trim();
-        String password = body.getOrDefault("password", "");
+        String username = trim(body.get("username"));
+        String password = body.get("password");
 
-        if (username.isBlank() || password.isBlank()) {
+        if (username == null || username.isBlank() || password == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "username and password required");
         }
 
-        User user = userRepository.findByUsername(username)
-            .orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username or password"));
-
-        // BCrypt comparison — never compare plain text
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username or password");
+        Optional<User> stored = userRepository.findByUsername(username);
+        if (stored.isEmpty() || !stored.get().getPassword().equals(password)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
+        User u = stored.get();
+
+        // Fresh session — clear counters AND remove from blocked list
+        monitoringService.resetCountersForUser(username);
+        ApiLoggingInterceptor.unblockUser(username);
+
         String token = jwtUtil.generateToken(username);
-        return buildResponse(user, token);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("token", token);
+        response.put("username", u.getUsername());
+        response.put("role", u.getRole());
+        response.put("name", u.getName());
+        return response;
     }
 
-    // ── Me ────────────────────────────────────────────────────────────
+    @PostMapping("/register")
+    public Map<String, Object> register(@RequestBody Map<String, String> body) {
+        String username = trim(body.get("username"));
+        String password = body.get("password");
+        String name     = trim(body.get("name"));
+        String email    = trim(body.get("email"));
+
+        // ---- validation ----
+        if (username == null || username.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Username is required");
+        }
+        if (username.length() < 3) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Username must be at least 3 characters");
+        }
+        if (password == null || password.length() < 4) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Password must be at least 4 characters");
+        }
+        if (name == null || name.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Full name is required");
+        }
+        if (email == null || email.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
+        }
+        if (!EMAIL_RE.matcher(email).matches()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Please enter a valid email address");
+        }
+
+        // ---- uniqueness ----
+        if ("admin".equalsIgnoreCase(username)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Username 'admin' is reserved");
+        }
+        if (userRepository.existsByUsername(username)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This username is already taken");
+        }
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This email is already registered");
+        }
+
+        // ---- create user ----
+        User newUser = new User(username, password, name, email, "user");
+        userRepository.save(newUser);
+
+        // Brand-new user — completely clean slate
+        monitoringService.resetCountersForUser(username);
+        ApiLoggingInterceptor.unblockUser(username);
+
+        String token = jwtUtil.generateToken(username);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("token", token);
+        response.put("username", username);
+        response.put("role", "user");
+        response.put("name", name);
+        return response;
+    }
+
     @GetMapping("/me")
     public Map<String, Object> me() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         }
-        User user = userRepository.findByUsername(auth.getName())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
-        return buildResponse(user, null);
+        String username = auth.getName();
+        Optional<User> rec = userRepository.findByUsername(username);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("username", username);
+        response.put("role", rec.map(User::getRole).orElse("user"));
+        response.put("name", rec.map(User::getName).orElse(username));
+        return response;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────
-    private Map<String, Object> buildResponse(User user, String token) {
-        Map<String, Object> res = new HashMap<>();
-        if (token != null) res.put("token", token);
-        res.put("username",  user.getUsername());
-        res.put("name",      user.getName());
-        res.put("email",     user.getEmail());
-        res.put("role",      user.getRole());
-        res.put("createdAt", user.getCreatedAt());
-        return res;
-    }
-
-    /**
-     * Seeds the default admin account on first startup.
-     * Password is BCrypt hashed — safe to store in DB.
-     */
-    private void seedAdmin() {
-        if (!userRepository.existsByUsername("admin")) {
-            User admin = new User(
-                "Administrator",
-                "admin",
-                "admin@apiguardian.local",
-                passwordEncoder.encode("password"),   // BCrypt hashed
-                "admin"
-            );
-            userRepository.save(admin);
-            System.out.println("✅ Default admin user created in database");
-        }
+    private static String trim(String s) {
+        return s == null ? null : s.trim();
     }
 }
