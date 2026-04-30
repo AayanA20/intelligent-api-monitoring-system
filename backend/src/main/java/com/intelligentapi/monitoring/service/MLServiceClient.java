@@ -10,8 +10,8 @@ import java.util.Map;
 public class MLServiceClient {
 
     private final RestTemplate restTemplate = new RestTemplate();
-    private static final String ML_URL      = "http://your-ml-api.onrender.com/predict";
-    private static final String ML_RESET_URL = "https://your-ml-service.onrender.com/reset";
+    private static final String ML_URL      = "https://intelligent-api-monitoring-system-6.onrender.com/predict";
+    private static final String ML_RESET_URL = "https://intelligent-api-monitoring-system-6.onrender.com/reset";
 
     /**
      * Ask the ML service whether this request is abusive.
