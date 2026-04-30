@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const BASE_URL = 'https://your-backend.onrender.com'
+const BASE_URL = 'https://intelligent-api-monitoring-system-3.onrender.com'
 
 const api = axios.create({
   baseURL: BASE_URL,
