@@ -1,14 +1,17 @@
 import sys
 import re
+import traceback
+from urllib.parse import unquote
+
 import torch
 import torch.nn as nn
 from fastapi import FastAPI
 from pydantic import BaseModel
-import traceback
-from collections import defaultdict
-from threading import Lock
 
-# ── Step 1: Define APITransformer ──
+# ─────────────────────────────────────────────
+# Step 1: Define APITransformer placeholder
+# (needed so torch.load can deserialize model)
+# ─────────────────────────────────────────────
 class APITransformer(nn.Module):
     def __init__(self):
         super().__init__()
@@ -16,12 +19,16 @@ class APITransformer(nn.Module):
     def forward(self, x):
         return self.input_proj(x)
 
-# ── Step 2: Inject into __main__ so pickle/torch.load can find it ──
+
+# Inject into __main__
 import __main__ as _real_main
 _real_main.APITransformer = APITransformer
-sys.modules['__main__'].APITransformer = APITransformer
+sys.modules["__main__"].APITransformer = APITransformer
 
-# ── Step 3: Load model ──
+
+# ─────────────────────────────────────────────
+# Step 2: Load ML Model
+# ─────────────────────────────────────────────
 MODEL_PATH = "model.pt"
 
 try:
@@ -29,85 +36,124 @@ try:
     model.eval()
     print("✅ Model loaded successfully:", type(model))
 except Exception as e:
-    print(f"❌ Model loading failed: {e}")
+    print("❌ Model loading failed:", e)
     raise
 
-# ── Step 4: Load feature extractor ──
+
+# ─────────────────────────────────────────────
+# Step 3: Load Feature Extractor
+# ─────────────────────────────────────────────
 from minor_ml_models2 import ModelUtils
 utils = ModelUtils()
 
-# ── Step 5: Per-user request counter ──────────────────────────────────────────
-_user_request_counts = defaultdict(int)
-_counter_lock = Lock()
 
-MIN_REQUESTS_FOR_ML_SCORE = 10
-
-def increment_and_get(user: str) -> int:
-    with _counter_lock:
-        _user_request_counts[user] += 1
-        return _user_request_counts[user]
-
-def reset_all_counters():
-    with _counter_lock:
-        _user_request_counts.clear()
-
-# ── Step 6: Attack pattern detection ──────────────────────────────────────────
-# Removed command injection patterns — focus on SQL, XSS, path traversal, scanners
+# ─────────────────────────────────────────────
+# Step 4: Strong Hybrid Detection Rules
+# ─────────────────────────────────────────────
 PATTERN_OVERRIDES = {
-    'BLOCK': [
-        re.compile(r'\.\.\/|\.\.\\|%2e%2e|etc\/passwd|windows\.ini', re.IGNORECASE),
-        re.compile(r'eval\(|exec\(|system\(|\/bin\/sh|passthru', re.IGNORECASE),
-        re.compile(r'\$\{|jndi:|ldap://|rmi://', re.IGNORECASE),
+    "BLOCK": [
+        # SQL Injection
+        re.compile(
+            r"(\bselect\b.*\bfrom\b|\bunion\b.*\bselect\b|\binsert\b|\bupdate\b|\bdelete\b|\bdrop\b|--|#|sleep\s*\(|or\s+1=1)",
+            re.IGNORECASE,
+        ),
+
+        # Path Traversal
+        re.compile(
+            r"(\.\./|\.\.\\|%2e%2e|etc/passwd|windows\.ini|/proc/self/environ)",
+            re.IGNORECASE,
+        ),
+
+        # XSS
+        re.compile(
+            r"(<script|javascript:|onerror=|onload=|alert\s*\(|<iframe|document\.cookie)",
+            re.IGNORECASE,
+        ),
+
+        # Command Injection
+        re.compile(
+            r"(;|\||&&|\$\()?\s*(ls|cat|rm|wget|curl|bash|sh|python|nc)\b",
+            re.IGNORECASE,
+        ),
+
+        # Log4j / RCE
+        re.compile(
+            r"(\$\{jndi:|ldap://|rmi://|exec\(|system\(|passthru|/bin/sh)",
+            re.IGNORECASE,
+        ),
     ],
-    'WARN': [
-        re.compile(r"select\b|union\b|insert\b|drop\b|delete\b|--|sleep\(|1=1", re.IGNORECASE),
-        re.compile(r'<script|javascript:|onerror=|onload=|alert\(|<iframe', re.IGNORECASE),
-        re.compile(r'sqlmap|nikto|nmap|burpsuite|masscan|dirbuster', re.IGNORECASE),
+
+    "WARN": [
+        # Security scanners
+        re.compile(
+            r"(sqlmap|nikto|nmap|burpsuite|masscan|dirbuster|acunetix)",
+            re.IGNORECASE,
+        ),
+
+        # Suspicious encoded payloads
+        re.compile(
+            r"(%27|%22|%3c|%3e|%3d|%2f|base64|char\()",
+            re.IGNORECASE,
+        ),
     ],
 }
 
-# ── Step 7: FastAPI app ───────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────
+# Step 5: FastAPI App
+# ─────────────────────────────────────────────
 app = FastAPI()
 
-class RequestData(BaseModel):
-    method:        str  = "GET"
-    url:           str  = "/"
-    headers:       dict = {}
-    body:          str  = ""
-    status_code:   int  = 200
-    response_body: str  = ""
-    user:          str  = "anonymous"
 
+class RequestData(BaseModel):
+    method: str = "GET"
+    url: str = "/"
+    headers: dict = {}
+    body: str = ""
+    status_code: int = 200
+    response_body: str = ""
+    user: str = "anonymous"
+
+
+# ─────────────────────────────────────────────
+# Step 6: Prediction Endpoint
+# ─────────────────────────────────────────────
 @app.post("/predict")
 def predict(req: RequestData):
     try:
-        from urllib.parse import unquote
-        attack_surface = unquote(f"{req.url} {req.body} {req.response_body}")
-        ua = req.headers.get('User-Agent', '') or req.headers.get('user-agent', '')
+        # Build attack surface
+        attack_surface = unquote(
+            f"{req.method} {req.url} {req.body} {req.response_body}"
+        )
 
-        print(f"[predict] user={req.user} attack_surface: {attack_surface[:200]}")
+        ua = req.headers.get("User-Agent", "") or req.headers.get("user-agent", "")
 
-        # ── Content patterns — fire immediately on ANY request ──
-        for pattern in PATTERN_OVERRIDES['BLOCK']:
+        print(f"[predict] payload = {attack_surface[:250]}")
+
+        # ─────────────────────────────
+        # Rule Engine First (Guaranteed Detection)
+        # ─────────────────────────────
+        for pattern in PATTERN_OVERRIDES["BLOCK"]:
             if pattern.search(attack_surface) or pattern.search(ua):
-                print(f"[predict] BLOCK pattern: {pattern.pattern[:50]}")
-                return {"score": 0.95, "label": "BLOCK", "reason": "content_pattern"}
+                print(f"[BLOCK RULE] {pattern.pattern[:70]}")
+                return {
+                    "score": 0.95,
+                    "label": "BLOCK",
+                    "reason": "rule_match"
+                }
 
-        for pattern in PATTERN_OVERRIDES['WARN']:
+        for pattern in PATTERN_OVERRIDES["WARN"]:
             if pattern.search(attack_surface) or pattern.search(ua):
-                print(f"[predict] WARN pattern: {pattern.pattern[:50]}")
-                return {"score": 0.65, "label": "WARN", "reason": "content_pattern"}
+                print(f"[WARN RULE] {pattern.pattern[:70]}")
+                return {
+                    "score": 0.65,
+                    "label": "WARN",
+                    "reason": "rule_match"
+                }
 
-        # ── Per-user request count ──
-        count = increment_and_get(req.user)
-
-        # Not enough history — return ALLOW immediately
-        if count < MIN_REQUESTS_FOR_ML_SCORE:
-            print(f"[predict] user={req.user} count={count} "
-                  f"(need {MIN_REQUESTS_FOR_ML_SCORE}) → ALLOW")
-            return {"score": 0.0, "label": "ALLOW", "reason": "insufficient_history"}
-
-        # ── ML model score ──
+        # ─────────────────────────────
+        # ML Detection
+        # ─────────────────────────────
         features = utils.extract_features(req.dict())
         tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
@@ -115,31 +161,38 @@ def predict(req: RequestData):
             output = model(tensor)
             score = torch.sigmoid(output).mean().item()
 
-        label = (
-            "BLOCK" if score > 0.8 else
-            "WARN"  if score > 0.5 else
-            "ALLOW"
-        )
-        print(f"[predict] user={req.user} count={count} ml_score={score:.4f} label={label}")
-        return {"score": round(score, 4), "label": label, "reason": "ml_model"}
+        # Threshold tuning
+        if score >= 0.80:
+            label = "BLOCK"
+        elif score >= 0.50:
+            label = "WARN"
+        else:
+            label = "ALLOW"
+
+        print(f"[ML] score={score:.4f} label={label}")
+
+        return {
+            "score": round(score, 4),
+            "label": label,
+            "reason": "ml_model"
+        }
 
     except Exception as e:
         traceback.print_exc()
-        return {"error": str(e), "label": "ALLOW"}
+        return {
+            "score": 0.0,
+            "label": "ALLOW",
+            "reason": str(e)
+        }
 
+
+# ─────────────────────────────────────────────
+# Health Check
+# ─────────────────────────────────────────────
 @app.get("/health")
 def health():
-    with _counter_lock:
-        sessions = len(_user_request_counts)
     return {
-        "status":       "ok",
-        "user_sessions": sessions,
-        "min_requests": MIN_REQUESTS_FOR_ML_SCORE,
+        "status": "ok",
+        "model_loaded": True,
+        "mode": "Hybrid AI + Rule Engine"
     }
-
-@app.post("/reset")
-def reset():
-    """Called when Spring Boot resets counters."""
-    reset_all_counters()
-    print("[reset] All user ML request counters cleared.")
-    return {"status": "reset", "message": "All user ML sessions cleared"}
