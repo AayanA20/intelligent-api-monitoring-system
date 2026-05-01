@@ -36,7 +36,7 @@ except Exception as e:
 from minor_ml_models2 import ModelUtils
 utils = ModelUtils()
 
-# ── Step 5: Per-user request counter ──────────────────────────────────────────
+# ── Step 5: Per-user request counter ──
 _user_request_counts = defaultdict(int)
 _counter_lock = Lock()
 
@@ -51,22 +51,57 @@ def reset_all_counters():
     with _counter_lock:
         _user_request_counts.clear()
 
-# ── Step 6: Attack pattern detection ──────────────────────────────────────────
-# Removed command injection patterns — focus on SQL, XSS, path traversal, scanners
+# ── Step 6: Attack pattern detection ──
 PATTERN_OVERRIDES = {
     'BLOCK': [
-        re.compile(r'\.\.\/|\.\.\\|%2e%2e|etc\/passwd|windows\.ini', re.IGNORECASE),
-        re.compile(r'eval\(|exec\(|system\(|\/bin\/sh|passthru', re.IGNORECASE),
-        re.compile(r'\$\{|jndi:|ldap://|rmi://', re.IGNORECASE),
+
+        # SQL Injection
+        re.compile(
+            r"(select\b|union\b|insert\b|drop\b|delete\b|update\b|truncate\b|"
+            r"--|#|/\*|\*/|sleep\(|benchmark\(|waitfor\b|"
+            r"or\s+1=1|or\s+'1'='1|'\s*or\s*'1'='1|"
+            r"union\s+select|information_schema|xp_cmdshell)",
+            re.IGNORECASE
+        ),
+
+        # Path Traversal
+        re.compile(
+            r"(\.\./|\.\.\\|%2e%2e|%252e%252e|"
+            r"%2f|%5c|"
+            r"etc/passwd|windows\.ini|boot\.ini|winnt)",
+            re.IGNORECASE
+        ),
+
+        # Command Injection / RCE
+        re.compile(
+            r"(eval\(|exec\(|system\(|/bin/sh|passthru|cmd\.exe)",
+            re.IGNORECASE
+        ),
+
+        # Log4j / JNDI
+        re.compile(
+            r"(\$\{|jndi:|ldap://|rmi://)",
+            re.IGNORECASE
+        ),
     ],
+
     'WARN': [
-        re.compile(r"select\b|union\b|insert\b|drop\b|delete\b|--|sleep\(|1=1", re.IGNORECASE),
-        re.compile(r'<script|javascript:|onerror=|onload=|alert\(|<iframe', re.IGNORECASE),
-        re.compile(r'sqlmap|nikto|nmap|burpsuite|masscan|dirbuster', re.IGNORECASE),
+
+        # XSS
+        re.compile(
+            r"(<script|javascript:|onerror=|onload=|alert\(|<iframe)",
+            re.IGNORECASE
+        ),
+
+        # Scanner tools
+        re.compile(
+            r"(sqlmap|nikto|nmap|burpsuite|masscan|dirbuster)",
+            re.IGNORECASE
+        ),
     ],
 }
 
-# ── Step 7: FastAPI app ───────────────────────────────────────────────────────
+# ── Step 7: FastAPI app ──
 app = FastAPI()
 
 class RequestData(BaseModel):
@@ -82,32 +117,45 @@ class RequestData(BaseModel):
 def predict(req: RequestData):
     try:
         from urllib.parse import unquote
+
         attack_surface = unquote(f"{req.url} {req.body} {req.response_body}")
-        ua = req.headers.get('User-Agent', '') or req.headers.get('user-agent', '')
+        ua = req.headers.get("User-Agent", "") or req.headers.get("user-agent", "")
 
         print(f"[predict] user={req.user} attack_surface: {attack_surface[:200]}")
 
-        # ── Content patterns — fire immediately on ANY request ──
-        for pattern in PATTERN_OVERRIDES['BLOCK']:
+        # ── BLOCK rules first ──
+        for pattern in PATTERN_OVERRIDES["BLOCK"]:
             if pattern.search(attack_surface) or pattern.search(ua):
-                print(f"[predict] BLOCK pattern: {pattern.pattern[:50]}")
-                return {"score": 0.95, "label": "BLOCK", "reason": "content_pattern"}
+                print(f"[predict] BLOCK pattern matched")
+                return {
+                    "score": 0.95,
+                    "label": "BLOCK",
+                    "reason": "content_pattern"
+                }
 
-        for pattern in PATTERN_OVERRIDES['WARN']:
+        # ── WARN rules ──
+        for pattern in PATTERN_OVERRIDES["WARN"]:
             if pattern.search(attack_surface) or pattern.search(ua):
-                print(f"[predict] WARN pattern: {pattern.pattern[:50]}")
-                return {"score": 0.65, "label": "WARN", "reason": "content_pattern"}
+                print(f"[predict] WARN pattern matched")
+                return {
+                    "score": 0.65,
+                    "label": "WARN",
+                    "reason": "content_pattern"
+                }
 
-        # ── Per-user request count ──
+        # ── Request count ──
         count = increment_and_get(req.user)
 
-        # Not enough history — return ALLOW immediately
+        # Low history → ALLOW only if clean
         if count < MIN_REQUESTS_FOR_ML_SCORE:
-            print(f"[predict] user={req.user} count={count} "
-                  f"(need {MIN_REQUESTS_FOR_ML_SCORE}) → ALLOW")
-            return {"score": 0.0, "label": "ALLOW", "reason": "insufficient_history"}
+            print(f"[predict] user={req.user} count={count} → ALLOW")
+            return {
+                "score": 0.0,
+                "label": "ALLOW",
+                "reason": "insufficient_history"
+            }
 
-        # ── ML model score ──
+        # ── ML model ──
         features = utils.extract_features(req.dict())
         tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
@@ -117,29 +165,41 @@ def predict(req: RequestData):
 
         label = (
             "BLOCK" if score > 0.8 else
-            "WARN"  if score > 0.5 else
+            "WARN" if score > 0.5 else
             "ALLOW"
         )
-        print(f"[predict] user={req.user} count={count} ml_score={score:.4f} label={label}")
-        return {"score": round(score, 4), "label": label, "reason": "ml_model"}
+
+        print(f"[predict] user={req.user} ml_score={score:.4f} label={label}")
+
+        return {
+            "score": round(score, 4),
+            "label": label,
+            "reason": "ml_model"
+        }
 
     except Exception as e:
         traceback.print_exc()
-        return {"error": str(e), "label": "ALLOW"}
+        return {
+            "error": str(e),
+            "label": "ALLOW"
+        }
 
 @app.get("/health")
 def health():
     with _counter_lock:
         sessions = len(_user_request_counts)
+
     return {
-        "status":       "ok",
+        "status": "ok",
         "user_sessions": sessions,
         "min_requests": MIN_REQUESTS_FOR_ML_SCORE,
     }
 
 @app.post("/reset")
 def reset():
-    """Called when Spring Boot resets counters."""
     reset_all_counters()
     print("[reset] All user ML request counters cleared.")
-    return {"status": "reset", "message": "All user ML sessions cleared"}
+    return {
+        "status": "reset",
+        "message": "All user ML sessions cleared"
+    }
