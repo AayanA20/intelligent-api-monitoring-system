@@ -1,101 +1,33 @@
 import sys
 import re
-import traceback
-from urllib.parse import unquote
-
 import torch
 import torch.nn as nn
 from fastapi import FastAPI
 from pydantic import BaseModel
+from urllib.parse import unquote
+import traceback
 
-# ─────────────────────────────────────────────
-# Step 1: Define APITransformer placeholder
-# (needed so torch.load can deserialize model)
-# ─────────────────────────────────────────────
-class APITransformer(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        return self.input_proj(x)
-
-
-# Inject into __main__
-import __main__ as _real_main
-_real_main.APITransformer = APITransformer
-sys.modules["__main__"].APITransformer = APITransformer
-
-
-# ─────────────────────────────────────────────
-# Step 2: Load ML Model
-# ─────────────────────────────────────────────
-MODEL_PATH = "model.pt"
-
-try:
-    model = torch.load(MODEL_PATH, map_location="cpu", weights_only=False)
-    model.eval()
-    print("✅ Model loaded successfully:", type(model))
-except Exception as e:
-    print("❌ Model loading failed:", e)
-    raise
-
-
-# ─────────────────────────────────────────────
-# Step 3: Load Feature Extractor
-# ─────────────────────────────────────────────
 from minor_ml_models2 import ModelUtils
 utils = ModelUtils()
 
 
-# ─────────────────────────────────────────────
-# Step 4: Strong Hybrid Detection Rules
-# ─────────────────────────────────────────────
+# ── Step 5: Attack pattern overrides ──
+# These guarantee detection regardless of ML model score
 PATTERN_OVERRIDES = {
-    "BLOCK": [
-        # SQL Injection (FIXED ONLY THIS)
-        re.compile(
-            r"(union\s+select|select\s+.*from|insert\s+into|drop\s+table|delete\s+from|update\s+.*set|or\s+1=1|'\s*or\s*'1'='1|--|#|sleep\s*\()",
-            re.IGNORECASE,
-        ),
-
-        # Path Traversal (UNCHANGED)
-        re.compile(
-            r"(\.\./|\.\.\\|%2e%2e|etc/passwd|windows\.ini|/proc/self/environ)",
-            re.IGNORECASE,
-        ),
-
-        # XSS (UNCHANGED)
-        re.compile(
-            r"(<script|javascript:|onerror=|onload=|alert\s*\(|<iframe|document\.cookie)",
-            re.IGNORECASE,
-        ),
-
-        # Command Injection (UNCHANGED)
-        re.compile(
-            r"(;|\||&&|\$\()?\s*(ls|cat|rm|wget|curl|bash|sh|python|nc)\b",
-            re.IGNORECASE,
-        ),
-
-        # Log4j / RCE (UNCHANGED)
-        re.compile(
-            r"(\$\{jndi:|ldap://|rmi://|exec\(|system\(|passthru|/bin/sh)",
-            re.IGNORECASE,
-        ),
+    'BLOCK': [
+        re.compile(r'(;|\||\`|\$\()\s*(ls|cat|rm|wget|curl|bash|sh|python|nc)\b', re.IGNORECASE),
+        re.compile(r'\.\.\/|\.\.\\|%2e%2e|etc\/passwd|windows\.ini', re.IGNORECASE),
+        re.compile(r'eval\(|exec\(|system\(|\/bin\/sh|passthru', re.IGNORECASE),
+        re.compile(r'\$\{|jndi:|ldap://|rmi://', re.IGNORECASE),
     ],
-
-    "WARN": [
-        # Security scanners ONLY (FIXED)
-        re.compile(
-            r"(sqlmap|nikto|nmap|burpsuite|masscan|dirbuster|acunetix)",
-            re.IGNORECASE,
-        ),
+    'WARN': [
+        re.compile(r"select\b|union\b|insert\b|drop\b|delete\b|--|sleep\(|1=1", re.IGNORECASE),
+        re.compile(r'<script|javascript:|onerror=|onload=|alert\(|<iframe', re.IGNORECASE),
+        re.compile(r'sqlmap|nikto|nmap|burpsuite|masscan|dirbuster', re.IGNORECASE),
     ],
 }
 
-
-# ─────────────────────────────────────────────
-# Step 5: FastAPI App
-# ─────────────────────────────────────────────
+# ── Step 6: FastAPI app ──
 app = FastAPI()
 
 
@@ -109,84 +41,46 @@ class RequestData(BaseModel):
     user: str = "anonymous"
 
 
-# ─────────────────────────────────────────────
-# Step 6: Prediction Endpoint
-# ─────────────────────────────────────────────
 @app.post("/predict")
 def predict(req: RequestData):
     try:
-        # Build attack surface
-        attack_surface = unquote(
-            f"{req.method} {req.url} {req.body} {req.response_body}"
-        )
+        attack_surface = unquote(f"{req.url} {req.body} {req.response_body}")
+        ua = req.headers.get('User-Agent', '') or req.headers.get('user-agent', '')
 
-        ua = req.headers.get("User-Agent", "") or req.headers.get("user-agent", "")
+        print(f"[predict] attack_surface: {attack_surface[:200]}")
+        print(f"[predict] ua: {ua[:100]}")
 
-        print(f"[predict] payload = {attack_surface[:250]}")
-
-        # ─────────────────────────────
-        # Rule Engine First (Guaranteed Detection)
-        # ─────────────────────────────
-        for pattern in PATTERN_OVERRIDES["BLOCK"]:
+        # ── Override: check explicit patterns FIRST ──
+        for pattern in PATTERN_OVERRIDES['BLOCK']:
             if pattern.search(attack_surface) or pattern.search(ua):
-                print(f"[BLOCK RULE] {pattern.pattern[:70]}")
-                return {
-                    "score": 0.95,
-                    "label": "BLOCK",
-                    "reason": "rule_match"
-                }
+                print(f"[predict] BLOCK override triggered: {pattern.pattern[:50]}")
+                return {"score": 0.95, "label": "BLOCK"}
 
-        for pattern in PATTERN_OVERRIDES["WARN"]:
+        for pattern in PATTERN_OVERRIDES['WARN']:
             if pattern.search(attack_surface) or pattern.search(ua):
-                print(f"[WARN RULE] {pattern.pattern[:70]}")
-                return {
-                    "score": 0.65,
-                    "label": "WARN",
-                    "reason": "rule_match"
-                }
+                print(f"[predict] WARN override triggered: {pattern.pattern[:50]}")
+                return {"score": 0.65, "label": "WARN"}
 
-        # ─────────────────────────────
-        # ML Detection
-        # ─────────────────────────────
+        # ── Fall back to ML model score ──
         features = utils.extract_features(req.dict())
         tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
         with torch.no_grad():
             output = model(tensor)
+            print(f"[predict] raw output shape: {output.shape}")
+
+            # Model outputs 256 features — apply sigmoid + mean to get a single score
             score = torch.sigmoid(output).mean().item()
 
-        # Threshold tuning
-        if score >= 0.80:
-            label = "BLOCK"
-        elif score >= 0.50:
-            label = "WARN"
-        else:
-            label = "ALLOW"
+        label = (
+            "BLOCK" if score > 0.8 else
+            "WARN" if score > 0.5 else
+            "ALLOW"
+        )
 
-        print(f"[ML] score={score:.4f} label={label}")
-
-        return {
-            "score": round(score, 4),
-            "label": label,
-            "reason": "ml_model"
-        }
+        print(f"[predict] ml score={score:.4f} label={label}")
+        return {"score": round(score, 4), "label": label}
 
     except Exception as e:
         traceback.print_exc()
-        return {
-            "score": 0.0,
-            "label": "ALLOW",
-            "reason": str(e)
-        }
-
-
-# ─────────────────────────────────────────────
-# Health Check
-# ─────────────────────────────────────────────
-@app.get("/health")
-def health():
-    return {
-        "status": "ok",
-        "model_loaded": True,
-        "mode": "Hybrid AI + Rule Engine"
-    }
+        return {"score": 0.0, "label": "ALLOW", "error": str(e)}
