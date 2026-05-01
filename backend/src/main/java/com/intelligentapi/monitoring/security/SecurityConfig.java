@@ -42,7 +42,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // Vite dev server is 5173; CRA is 3000. Include both.
+        
         config.setAllowedOrigins(List.of(
             "http://localhost:5173",
             "http://localhost:3000",
