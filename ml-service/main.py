@@ -21,7 +21,7 @@ PATTERN_OVERRIDES = {
         re.compile(r'\$\{|jndi:|ldap://|rmi://', re.IGNORECASE),
     ],
     'WARN': [
-        re.compile(r"select\b|union\b|insert\b|drop\b|delete\b|--|sleep\(|1=1", re.IGNORECASE),
+        re.compile(r"(select\b|union\b|insert\b|drop\b|delete\b|--|sleep\s*\(|1\s*=\s*1|or\s+1\s*=\s*1)", re.IGNORECASE),
         re.compile(r'<script|javascript:|onerror=|onload=|alert\(|<iframe', re.IGNORECASE),
         re.compile(r'sqlmap|nikto|nmap|burpsuite|masscan|dirbuster', re.IGNORECASE),
     ],
