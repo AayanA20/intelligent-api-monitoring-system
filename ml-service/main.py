@@ -52,31 +52,31 @@ utils = ModelUtils()
 # ─────────────────────────────────────────────
 PATTERN_OVERRIDES = {
     "BLOCK": [
-        # SQL Injection
+        # SQL Injection (FIXED ONLY THIS)
         re.compile(
-            r"(\bselect\b.*\bfrom\b|\bunion\b.*\bselect\b|\binsert\b|\bupdate\b|\bdelete\b|\bdrop\b|--|#|sleep\s*\(|or\s+1=1)",
+            r"(union\s+select|select\s+.*from|insert\s+into|drop\s+table|delete\s+from|update\s+.*set|or\s+1=1|'\s*or\s*'1'='1|--|#|sleep\s*\()",
             re.IGNORECASE,
         ),
 
-        # Path Traversal
+        # Path Traversal (UNCHANGED)
         re.compile(
             r"(\.\./|\.\.\\|%2e%2e|etc/passwd|windows\.ini|/proc/self/environ)",
             re.IGNORECASE,
         ),
 
-        # XSS
+        # XSS (UNCHANGED)
         re.compile(
             r"(<script|javascript:|onerror=|onload=|alert\s*\(|<iframe|document\.cookie)",
             re.IGNORECASE,
         ),
 
-        # Command Injection
+        # Command Injection (UNCHANGED)
         re.compile(
             r"(;|\||&&|\$\()?\s*(ls|cat|rm|wget|curl|bash|sh|python|nc)\b",
             re.IGNORECASE,
         ),
 
-        # Log4j / RCE
+        # Log4j / RCE (UNCHANGED)
         re.compile(
             r"(\$\{jndi:|ldap://|rmi://|exec\(|system\(|passthru|/bin/sh)",
             re.IGNORECASE,
@@ -84,15 +84,9 @@ PATTERN_OVERRIDES = {
     ],
 
     "WARN": [
-        # Security scanners
+        # Security scanners ONLY (FIXED)
         re.compile(
             r"(sqlmap|nikto|nmap|burpsuite|masscan|dirbuster|acunetix)",
-            re.IGNORECASE,
-        ),
-
-        # Suspicious encoded payloads
-        re.compile(
-            r"(%27|%22|%3c|%3e|%3d|%2f|base64|char\()",
             re.IGNORECASE,
         ),
     ],
