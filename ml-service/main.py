@@ -14,13 +14,14 @@ utils = ModelUtils()
 # ── Step 5: Attack pattern overrides ──
 # These guarantee detection regardless of ML model score
 PATTERN_OVERRIDES = {
-    'BLOCK': [
-        re.compile(r'(;|\||\`|\$\()\s*(ls|cat|rm|wget|curl|bash|sh|python|nc)\b', re.IGNORECASE),
-        re.compile(r'\.\.\/|\.\.\\|%2e%2e|etc\/passwd|windows\.ini', re.IGNORECASE),
-        re.compile(r'eval\(|exec\(|system\(|\/bin\/sh|passthru', re.IGNORECASE),
-        re.compile(r'\$\{|jndi:|ldap://|rmi://', re.IGNORECASE),
-        re.compile(r"(select\b|union(\s+all)?\b|insert\b|update\b|drop\b|delete\b|truncate\b|--|#|sleep\s*\(|benchmark\s*\(|or\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+['\"]?|or\s+['\"].+['\"]\s*=\s*['\"].+['\"]|'?\s*or\s*'1'='1)", re.IGNORECASE)
-    ],
+'BLOCK': [
+    re.compile(r'(;|\||\`|\$\()\s*(ls|cat|rm|wget|curl|bash|sh|python|nc)\b', re.IGNORECASE),
+    re.compile(r'\.\.\/|\.\.\\|%2e%2e|etc\/passwd|windows\.ini', re.IGNORECASE),
+    re.compile(r'eval\(|exec\(|system\(|\/bin\/sh|passthru', re.IGNORECASE),
+    re.compile(r'\$\{|jndi:|ldap://|rmi://', re.IGNORECASE),
+
+    re.compile(r"(select|union|insert|update|drop|delete|truncate|or\s+1\s*=\s*1|--|'|#)", re.IGNORECASE),
+],
     'WARN': [
     
         re.compile(r'<script|javascript:|onerror=|onload=|alert\(|<iframe', re.IGNORECASE),
